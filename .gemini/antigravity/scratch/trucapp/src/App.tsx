@@ -39,6 +39,7 @@ function App() {
   const [step, setStep] = useState<AppStep>(() => {
     const savedStep = localStorage.getItem('trucapp-app-step');
     if (savedStep === 'MATCH' && !useMatchStore.getState().id) return 'HOME';
+    if (savedStep === 'STATS') return 'HOME'; // Migration: STATS is now part of HISTORY
     return (savedStep as AppStep) || 'HOME';
   });
   // ... 
