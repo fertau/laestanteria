@@ -1,3 +1,4 @@
+// Trucapp - Build Trigger edcb59c
 import { useState, useEffect } from 'react';
 import { MatchScreen } from './components/MatchScreen';
 import { SplashScreen } from './components/SplashScreen';
