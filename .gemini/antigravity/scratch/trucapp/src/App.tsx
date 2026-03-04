@@ -8,7 +8,6 @@ import { HistoryScreen } from './components/HistoryScreen';
 import { AccountSelector } from './components/AccountSelector';
 import { HomeScreen } from './components/HomeScreen';
 import { PicaPicaSetup } from './components/PicaPicaSetup';
-import { PicaPicaHub } from './components/PicaPicaHub';
 import { Leaderboard } from './components/Leaderboard';
 
 import { useMatchStore } from './store/useMatchStore';
@@ -24,12 +23,12 @@ import './index.css';
 // 1. Account Selection (if no auth)
 // 2. Home Screen
 // 3. Setup Flow
-// 4. Match OR PicaPica Setup -> Hub -> SubMatch
-// 5. Returns to PicaHub -> Home
+// 4. Match OR PicaPica Setup -> Match (with hand system)
+// 5. Returns to Home
 
 type AppStep = 'AUTH' | 'HOME' | 'SETUP_PLAYERS_COUNT' | 'SETUP_PLAYERS_SELECT' | 'SETUP_TEAMS' |
   'MATCH' | 'HISTORY' | 'LEADERBOARD' | 'SOCIAL' |
-  'PICAPICA_SETUP' | 'PICAPICA_HUB';
+  'PICAPICA_SETUP';
 
 import { SocialHub } from './components/SocialHub';
 
@@ -40,15 +39,15 @@ function App() {
     const savedStep = localStorage.getItem('trucapp-app-step');
     if (savedStep === 'MATCH' && !useMatchStore.getState().id) return 'HOME';
     if (savedStep === 'STATS') return 'HOME'; // Migration: STATS is now part of HISTORY
+    if (savedStep === 'PICAPICA_HUB') return 'HOME'; // Migration: PicaPicaHub removed
     return (savedStep as AppStep) || 'HOME';
   });
-  // ... 
 
   useEffect(() => {
     localStorage.setItem('trucapp-app-step', step);
   }, [step]);
 
-  const [showSplash, setShowSplash] = useState(true); // Initial splash state
+  const [showSplash, setShowSplash] = useState(true);
 
   const [playerCount, setPlayerCount] = useState<number>(2);
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
@@ -58,12 +57,8 @@ function App() {
 
   const resetMatch = useMatchStore(state => state.resetMatch);
   const setPlayers = useMatchStore(state => state.setPlayers);
-  const setTargetScore = useMatchStore(state => state.setTargetScore);
   const addMatchToHistory = useHistoryStore(state => state.addMatch);
   const fetchHistory = useHistoryStore(state => state.fetchMatches);
-
-  // Migration: Removed auto-wipe to prevent data loss.
-  // Old users without PINs can be handled gracefully or manually updated.
 
   // Load History and Players on Mount
   useEffect(() => {
@@ -72,11 +67,7 @@ function App() {
   }, []);
 
   // Pica Pica
-  const picaPicaActive = usePicaPicaStore(state => state.isActive);
-  const picaPicaMatches = usePicaPicaStore(state => state.matches);
-  const picaPicaUpdate = usePicaPicaStore(state => state.updateMatchResult);
   const picaPicaReset = usePicaPicaStore(state => state.reset);
-  const [activeSubMatchId, setActiveSubMatchId] = useState<string | null>(null);
 
   const setMetadata = useMatchStore(state => state.setMetadata);
   const setPairId = useMatchStore(state => state.setPairId);
@@ -101,15 +92,13 @@ function App() {
     targetScore?: number
   ) => {
     if (playerCount === 6) {
-      // Start PicaPica Flow
+      // Start PicaPica Flow — goes to setup, which configures both stores and navigates to MATCH
       setTeamsConfig(teams);
       setStep('PICAPICA_SETUP');
     } else {
       // Standard Match
-      // Important: Reset match state FIRST, then set players/teams
       resetMatch(playerCount === 2 ? '1v1' : '2v2');
 
-      // Set Custom Target Score if provided
       if (targetScore) {
         useMatchStore.getState().setTargetScore(targetScore);
       }
@@ -156,24 +145,16 @@ function App() {
 
   const handleFinishMatch = () => {
     const matchState = useMatchStore.getState();
+    const isPicaPica = usePicaPicaStore.getState().isActive;
 
-    // Always save history for standard matches too!
-    if (!activeSubMatchId) {
-      addMatchToHistory(matchState);
-    }
+    // Save to history
+    addMatchToHistory(matchState);
 
-    if (activeSubMatchId && picaPicaActive) {
-      // It was a submatch
-      if (matchState.winner) {
-        picaPicaUpdate(activeSubMatchId, matchState.winner, matchState.teams.nosotros.score, matchState.teams.ellos.score);
-        // Sync submatch to cloud history for rankings
-        addMatchToHistory(matchState);
-      }
-      setActiveSubMatchId(null);
-      setStep('PICAPICA_HUB');
+    if (isPicaPica) {
+      // Reset pica-pica state
+      picaPicaReset();
     } else {
-      // Standard Match
-      // V2: Record Pair Results
+      // V2: Record Pair Results (standard matches)
       if (matchState.pairs) {
         if (matchState.pairs.nosotros && matchState.winner) {
           recordPairResult(matchState.pairs.nosotros, matchState.winner === 'nosotros');
@@ -182,9 +163,9 @@ function App() {
           recordPairResult(matchState.pairs.ellos, matchState.winner === 'ellos');
         }
       }
-
-      setStep('HOME');
     }
+
+    setStep('HOME');
   };
 
   // Splash Screen
@@ -228,33 +209,7 @@ function App() {
       <PicaPicaSetup
         nosotros={teamsConfig.nosotros}
         ellos={teamsConfig.ellos}
-        onStart={() => setStep('PICAPICA_HUB')}
-      />
-    );
-  }
-
-  if (step === 'PICAPICA_HUB') {
-    return (
-      <PicaPicaHub
-        onPlayMatch={(id) => {
-          setActiveSubMatchId(id);
-          const subMatch = picaPicaMatches.find(m => m.id === id);
-          if (subMatch) {
-            // Init ScoreBoard for this match
-            const target = usePicaPicaStore.getState().targetScore;
-
-            resetMatch('1v1');
-            setTargetScore(target);
-
-            setPlayers('nosotros', [subMatch.playerNosotrosId]);
-            setPlayers('ellos', [subMatch.playerEllosId]);
-            setStep('MATCH');
-          }
-        }}
-        onFinishPicaPica={() => {
-          picaPicaReset();
-          setStep('HOME');
-        }}
+        onStart={() => setStep('MATCH')}
       />
     );
   }

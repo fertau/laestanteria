@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useMatchStore } from '../store/useMatchStore';
 import { ScoreSquare } from './ScoreSquare';
-import type { TeamId, PointType } from '../types';
+import { ShortcutButton } from './ShortcutButton';
+import type { TeamId } from '../types';
 
 // Long Press Hook
 function useLongPress(callback: () => void, ms = 500) {
@@ -25,34 +26,6 @@ function useLongPress(callback: () => void, ms = 500) {
         onTouchStart: () => setStartLongPress(true),
         onTouchEnd: () => setStartLongPress(false),
     };
-}
-
-const ShortcutButton = ({
-    label, points, teamId, onAction
-}: {
-    label: string, points: string | number, type?: PointType, teamId: TeamId, onAction: () => void
-}) => {
-    return (
-        <button
-            className={`
-                px-1 py-1.5 rounded flex flex-col items-center justify-center gap-0.5
-                border border-[var(--color-border)] active:scale-95 transition-all
-                min-h-[64px] relative overflow-hidden group
-                ${teamId === 'nosotros' ? 'bg-[var(--color-nosotros)]/10 text-[var(--color-nosotros)] border-[var(--color-nosotros)]/30 active:bg-[var(--color-nosotros)]/20 shadow-[0_0_15px_rgba(74,222,128,0.1)]' : 'bg-[var(--color-ellos)]/10 text-[var(--color-ellos)] border-[var(--color-ellos)]/30 active:bg-[var(--color-ellos)]/20 shadow-[0_0_15px_rgba(251,191,36,0.1)]'}
-            `}
-            onClick={(e) => {
-                e.stopPropagation();
-                onAction();
-            }}
-        >
-            <div className="text-[10px] font-black uppercase tracking-tighter leading-none text-center group-active:scale-90 transition-transform">{label}</div>
-            <div className="text-[12px] font-black opacity-60 leading-none">
-                {typeof points === 'number' ? `+${points}` : points}
-            </div>
-            {/* Visual feedback for interaction */}
-            <div className="absolute inset-0 bg-white/5 opacity-0 group-active:opacity-100 transition-opacity"></div>
-        </button>
-    )
 }
 
 const SquareGroup = ({ points }: { points: number }) => {

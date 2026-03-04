@@ -2,6 +2,27 @@ export type TeamId = 'nosotros' | 'ellos';
 export type MatchMode = '1v1' | '2v2' | '3v3';
 export type PointType = 'envido' | 'real_envido' | 'falta_envido' | 'truco' | 'retruco' | 'vale_cuatro' | 'score_tap' | 'penalty';
 
+// Pica-pica (3v3) hand system
+export type HandType = 'redondo' | 'picapica';
+export type PicaPicaScoringMode = 'sumar_todos' | 'sumar_diferencia';
+
+export interface PicaPicaPairing {
+    pairIndex: number;
+    playerNosotrosId: string;
+    playerEllosId: string;
+    scoreNosotros: number;
+    scoreEllos: number;
+    history: GameAction[];
+}
+
+export interface HandRecord {
+    handNumber: number;
+    type: HandType;
+    pointsNosotros: number;
+    pointsEllos: number;
+    pairings?: PicaPicaPairing[];
+}
+
 export interface Player {
     id: string;
     name: string;
@@ -83,4 +104,7 @@ export interface MatchState {
     history: GameAction[];
     isFinished: boolean;
     winner?: TeamId | null;
+
+    // 3v3 Pica-pica config
+    picaPicaScoringMode?: PicaPicaScoringMode | null;
 }

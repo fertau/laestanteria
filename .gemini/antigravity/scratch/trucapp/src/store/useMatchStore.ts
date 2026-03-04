@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { MatchState, TeamId, PointType, GameAction } from '../types';
+import type { MatchState, TeamId, PointType, GameAction, PicaPicaScoringMode } from '../types';
 
 interface MatchStore extends MatchState {
     // Actions
@@ -17,6 +17,9 @@ interface MatchStore extends MatchState {
     // V2 Actions
     setMetadata: (location: string, date?: number) => void;
     setPairId: (team: TeamId, pairId: string) => void;
+
+    // V3 Pica-pica
+    setPicaPicaScoringMode: (mode: PicaPicaScoringMode | null) => void;
 
     // Cloud Persistence
     isCloudSynced: boolean;
@@ -47,7 +50,8 @@ const getMatchData = (state: MatchStore) => ({
     isFinished: state.isFinished,
     winner: state.winner ?? null,
     metadata: state.metadata ?? null,
-    pairs: state.pairs ?? null
+    pairs: state.pairs ?? null,
+    picaPicaScoringMode: state.picaPicaScoringMode ?? null
 });
 
 export const useMatchStore = create<MatchStore>()(
@@ -275,7 +279,9 @@ export const useMatchStore = create<MatchStore>()(
 
             setPairId: (team, pairId) => set((state) => ({
                 pairs: { ...state.pairs, [team]: pairId }
-            }))
+            })),
+
+            setPicaPicaScoringMode: (mode) => set({ picaPicaScoringMode: mode })
         }),
         {
             name: 'trucapp-match-storage-v1', // unique name
@@ -288,7 +294,8 @@ export const useMatchStore = create<MatchStore>()(
                 isFinished: state.isFinished,
                 winner: state.winner,
                 metadata: state.metadata,
-                pairs: state.pairs
+                pairs: state.pairs,
+                picaPicaScoringMode: state.picaPicaScoringMode
             })
         }
     )
