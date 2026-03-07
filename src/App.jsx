@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
+import { FollowsProvider } from './hooks/useFollows';
 import { ToastProvider } from './hooks/useToast';
 import Header from './components/Header';
 import ToastContainer from './components/Toast';
@@ -20,6 +21,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <FollowsProvider>
         <ToastProvider>
           <Header />
           <Routes>
@@ -36,6 +38,7 @@ export default function App() {
           </Routes>
           <ToastContainer />
         </ToastProvider>
+        </FollowsProvider>
       </AuthProvider>
     </BrowserRouter>
   );
