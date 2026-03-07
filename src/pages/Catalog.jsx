@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import BookGrid from '../components/BookGrid';
+import BookModal from '../components/BookModal';
 import UploadModal from '../components/UploadModal';
 
 const GENRES = [
@@ -34,6 +35,7 @@ export default function Catalog() {
   const [langFilter, setLangFilter] = useState('');
   const [sortBy, setSortBy] = useState('recent');
   const [showUpload, setShowUpload] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
 
   const filtered = useMemo(() => {
     let result = [...books];
@@ -186,7 +188,7 @@ export default function Catalog() {
 
       {/* Grid */}
       {filtered.length > 0 && (
-        <BookGrid books={filtered} onBookClick={(book) => console.log('TODO: open modal', book.id)} />
+        <BookGrid books={filtered} onBookClick={setSelectedBook} />
       )}
 
       {/* No results for filters */}
@@ -201,6 +203,7 @@ export default function Catalog() {
       )}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
   );
 }

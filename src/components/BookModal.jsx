@@ -1,0 +1,326 @@
+import { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { useBooks } from '../hooks/useBooks';
+import { useFollows } from '../hooks/useFollows';
+import { useRatings } from '../hooks/useRatings';
+import { useReadingStatus } from '../hooks/useReadingStatus';
+import { useToast } from '../hooks/useToast';
+import Stars from './Stars';
+import Avatar from './Avatar';
+
+const langLabels = {
+  es: 'Espanol', en: 'Ingles', pt: 'Portugues',
+  fr: 'Frances', de: 'Aleman', it: 'Italiano',
+};
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Sin estado' },
+  { value: 'want', label: 'Quiero leer' },
+  { value: 'reading', label: 'Leyendo' },
+  { value: 'finished', label: 'Leido' },
+];
+
+export default function BookModal({ book, onClose }) {
+  const { user } = useAuth();
+  const { deleteBook } = useBooks();
+  const { canDownloadFrom } = useFollows();
+  const { myRating, rate, removeRating } = useRatings(book.id);
+  const { status: readingStatus, setReadingStatus } = useReadingStatus(book.id);
+  const { toast } = useToast();
+
+  const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isOwner = book.uploadedBy?.uid === user?.uid;
+  const canDownload = canDownloadFrom(book.uploadedBy?.uid);
+  const avgRating = book.ratingCount > 0 ? (book.ratingSum / book.ratingCount).toFixed(1) : null;
+
+  const handleRate = async (value) => {
+    try {
+      if (value === 0) {
+        await removeRating();
+        toast('Rating eliminado', 'info');
+      } else {
+        await rate(value);
+        toast('Rating guardado', 'success');
+      }
+    } catch {
+      toast('Error al guardar rating', 'error');
+    }
+  };
+
+  const handleStatusChange = async (e) => {
+    try {
+      await setReadingStatus(e.target.value || null);
+      toast('Estado actualizado', 'success');
+    } catch {
+      toast('Error al actualizar estado', 'error');
+    }
+  };
+
+  const handleDownload = async () => {
+    // TODO: In Phase 4, this will call the generateDownloadLink Cloud Function
+    toast('La descarga se implementa en Fase 4 (Cloud Functions)', 'info');
+  };
+
+  const handleSendToKindle = async () => {
+    // TODO: In Phase 4, this will call the sendToKindle Cloud Function
+    toast('Envio a Kindle se implementa en Fase 4 (Cloud Functions)', 'info');
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteBook(book.id);
+      toast('Libro eliminado', 'success');
+      onClose();
+    } catch {
+      toast('Error al eliminar', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div style={{
+        background: 'var(--bg)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border)',
+        width: '100%',
+        maxWidth: 600,
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '20px 24px 0',
+        }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20 }}>
+            Detalle del libro
+          </h2>
+          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
+            X
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: 24 }}>
+          <div style={{
+            display: 'flex',
+            gap: 20,
+            marginBottom: 20,
+          }}>
+            {/* Cover */}
+            <div style={{
+              width: 140,
+              minWidth: 140,
+              aspectRatio: '2/3',
+              borderRadius: 'var(--radius)',
+              overflow: 'hidden',
+              background: 'var(--surface)',
+              flexShrink: 0,
+            }}>
+              {book.coverUrl ? (
+                <img
+                  src={book.coverUrl}
+                  alt={book.title}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div style={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 12,
+                  textAlign: 'center',
+                  background: 'linear-gradient(135deg, #1a1510 0%, #0f0c08 100%)',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>
+                    {book.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {book.author}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 20,
+                lineHeight: 1.3,
+                marginBottom: 4,
+              }}>
+                {book.title}
+              </h3>
+              <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 12 }}>
+                {book.author}
+              </div>
+
+              {/* Meta badges */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {book.language && (
+                  <span style={badgeStyle}>
+                    {langLabels[book.language] || book.language}
+                  </span>
+                )}
+                {book.genre && (
+                  <span style={badgeStyle}>{book.genre}</span>
+                )}
+                {book.isbn && (
+                  <span style={badgeStyle}>ISBN: {book.isbn}</span>
+                )}
+              </div>
+
+              {/* Average rating */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                {avgRating ? (
+                  <>
+                    <Stars value={parseFloat(avgRating)} readOnly size={16} />
+                    <span style={{ fontSize: 14, color: 'var(--accent)' }}>{avgRating}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                      ({book.ratingCount} {book.ratingCount === 1 ? 'voto' : 'votos'})
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Sin valoraciones</span>
+                )}
+              </div>
+
+              {/* Uploader */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                <Avatar src={null} name={book.uploadedBy?.displayName} size={20} />
+                <span>Subido por {book.uploadedBy?.displayName}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          {book.description && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
+                Descripcion
+              </div>
+              <p style={{
+                fontSize: 14,
+                lineHeight: 1.6,
+                color: 'var(--text)',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {book.description}
+              </p>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+
+          {/* My rating */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8 }}>
+              Tu valoracion
+            </div>
+            <Stars value={myRating || 0} onChange={handleRate} size={24} />
+          </div>
+
+          {/* Reading status */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
+              Estado de lectura
+            </div>
+            <select
+              value={readingStatus || ''}
+              onChange={handleStatusChange}
+              style={{ minWidth: 160 }}
+            >
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {canDownload && (
+                <>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    style={{ fontSize: 13 }}
+                  >
+                    {downloading ? 'Descargando...' : 'Descargar EPUB'}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleSendToKindle}
+                    style={{ fontSize: 13 }}
+                  >
+                    Enviar a Kindle
+                  </button>
+                </>
+              )}
+
+              {!canDownload && !isOwner && (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
+                  Necesitas acceso de biblioteca para descargar este libro.
+                </div>
+              )}
+
+              {isOwner && (
+                <button
+                  className={confirmDelete ? 'btn btn-danger' : 'btn btn-ghost'}
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{ fontSize: 13, marginLeft: 'auto', color: confirmDelete ? '#fff' : 'var(--danger)' }}
+                >
+                  {deleting ? 'Eliminando...' : confirmDelete ? 'Confirmar eliminacion' : 'Eliminar libro'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const badgeStyle = {
+  background: 'var(--surface)',
+  color: 'var(--text-muted)',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '3px 8px',
+  borderRadius: 4,
+  border: '1px solid var(--border)',
+};
