@@ -1,0 +1,9 @@
+node_modules
+dist
+.env.local
+.env
+functions/.env
+service-account.json
+import-state.json
+*.log
+.DS_Store

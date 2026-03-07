@@ -1,0 +1,154 @@
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+
+const navItems = [
+  { path: '/', label: 'Inicio', icon: '~' },
+  { path: '/catalog', label: 'Catalogo', icon: '#' },
+  { path: '/people', label: 'Personas', icon: '@' },
+  { path: '/collections', label: 'Colecciones', icon: '=' },
+  { path: '/stats', label: 'Stats', icon: '%' },
+];
+
+export default function Header({ notificationCount = 0 }) {
+  const { profile, signOut } = useAuth();
+  const location = useLocation();
+
+  if (!profile) return null;
+
+  return (
+    <header style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+      background: 'rgba(15, 12, 8, 0.85)',
+      backdropFilter: 'blur(12px)',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <div style={{
+        maxWidth: 1100,
+        margin: '0 auto',
+        padding: '0 20px',
+        height: 56,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <Link to="/" style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 20,
+          fontWeight: 700,
+          color: 'var(--accent)',
+          textDecoration: 'none',
+        }}>
+          La estanteria
+        </Link>
+
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius)',
+                fontSize: 13,
+                fontWeight: location.pathname === item.path ? 600 : 400,
+                color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-muted)',
+                textDecoration: 'none',
+                transition: 'color var(--transition)',
+              }}
+            >
+              <span className="nav-label">{item.label}</span>
+            </Link>
+          ))}
+
+          <Link
+            to="/notifications"
+            style={{
+              position: 'relative',
+              padding: '6px 10px',
+              color: 'var(--text-muted)',
+              textDecoration: 'none',
+              fontSize: 16,
+            }}
+          >
+            {'!'}
+            {notificationCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                background: 'var(--danger)',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 700,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </Link>
+        </nav>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            to={`/profile/${profile.id}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              textDecoration: 'none',
+              color: 'var(--text)',
+            }}
+          >
+            {profile.avatar ? (
+              <img
+                src={profile.avatar}
+                alt=""
+                style={{ width: 28, height: 28, borderRadius: '50%' }}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 13,
+                fontWeight: 700,
+              }}>
+                {(profile.displayName || '?')[0].toUpperCase()}
+              </div>
+            )}
+            <span style={{ fontSize: 13 }} className="nav-label">
+              {profile.displayName?.split(' ')[0]}
+            </span>
+          </Link>
+
+          <button
+            onClick={signOut}
+            className="btn-ghost"
+            style={{ fontSize: 12, padding: '4px 8px' }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 640px) {
+          .nav-label { display: none; }
+        }
+      `}</style>
+    </header>
+  );
+}
