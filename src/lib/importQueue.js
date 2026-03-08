@@ -1,7 +1,12 @@
 /**
  * Import queue engine for bulk book import.
  * Handles both multi-file (plain) and Calibre mode.
- * Pure functions — no React state.
+ *
+ * IMPORTANT: This module calls Drive/Firestore directly instead of going
+ * through useBooks.uploadBook. This avoids per-book token refresh popups
+ * that get blocked by the browser in async loops.
+ * The token and folderId are obtained ONCE before the loop starts
+ * (in ImportModal.startProcessing, triggered by user click).
  */
 
 import { parseFilename } from './parseFilename';
@@ -9,6 +14,9 @@ import { parseEpub } from './epubParser';
 import { parseCalibreOpf, getCalibreCoverUrl } from './calibreParser';
 import { fetchByISBN, searchByTitleAuthor as olSearch } from './openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch } from './googleBooks';
+import { uploadEpubToDrive, shareWithServiceAccount } from './googleDrive';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
 
 /**
  * Genre mapping: same as UploadModal + calibreParser.
@@ -146,13 +154,16 @@ export async function enrichMetadataStandalone(baseMeta) {
 
 /**
  * Process a single queue item through the full pipeline.
+ * Uses pre-fetched accessToken and folderId to avoid per-book token popups.
  *
  * @param {ImportQueueItem} item
- * @param {Object} context - { books, uploadBook }
+ * @param {Object} context - { books, accessToken, folderId, uid, profile }
  * @param {(update: Partial<ImportQueueItem>) => void} onUpdate
  * @returns {Promise<'done'|'skipped'|'error'>}
  */
 export async function processQueueItem(item, context, onUpdate) {
+  const { books, accessToken, folderId, uid, profile } = context;
+
   try {
     // --- Phase 1: Hash ---
     onUpdate({ status: 'hashing' });
@@ -160,7 +171,7 @@ export async function processQueueItem(item, context, onUpdate) {
     onUpdate({ fileHash });
 
     // --- Phase 2: Duplicate check ---
-    const hashMatch = context.books.find((b) => b.fileHash === fileHash);
+    const hashMatch = books.find((b) => b.fileHash === fileHash);
     if (hashMatch) {
       onUpdate({
         status: 'skipped',
@@ -238,7 +249,6 @@ export async function processQueueItem(item, context, onUpdate) {
             author: meta.author,
             isbn: meta.isbn,
           });
-          // Merge enriched data into meta (fill gaps only)
           if (!meta.title && enriched.title) meta.title = enriched.title;
           if (!meta.author && enriched.author) meta.author = enriched.author;
           if (!meta.description && enriched.description) meta.description = enriched.description;
@@ -262,23 +272,51 @@ export async function processQueueItem(item, context, onUpdate) {
 
     onUpdate({ metadata: meta });
 
-    // --- Phase 4: Upload ---
+    // --- Phase 4: Upload directly to Drive + Firestore ---
+    // (bypasses uploadBook to avoid per-book token refresh)
     onUpdate({ status: 'uploading' });
-    await context.uploadBook(
+
+    const driveTitle = `${meta.author.trim()} - ${meta.title.trim()}`;
+    const { driveFileId } = await uploadEpubToDrive(
+      accessToken,
       item.file,
-      {
-        title: meta.title.trim(),
-        author: meta.author.trim(),
-        genre: meta.genre || '',
-        language: meta.language || 'es',
-        description: (meta.description || '').trim(),
-        coverUrl: meta.coverUrl || '',
-        fileHash,
-        isbn: meta.isbn || null,
-        bookGroupId: null,
-      },
+      driveTitle,
+      folderId,
       (pct) => onUpdate({ progress: pct })
     );
+
+    // Share with service account
+    const saEmail = import.meta.env.VITE_SERVICE_ACCOUNT_EMAIL;
+    if (saEmail) {
+      try {
+        await shareWithServiceAccount(accessToken, driveFileId, saEmail);
+      } catch (err) {
+        console.warn('Could not share with service account:', err.message);
+      }
+    }
+
+    // Write to Firestore
+    await addDoc(collection(db, 'books'), {
+      title: meta.title.trim(),
+      author: meta.author.trim(),
+      genre: meta.genre || '',
+      language: meta.language || 'es',
+      description: (meta.description || '').trim(),
+      coverUrl: meta.coverUrl || '',
+      driveFileId,
+      driveOwnerUid: uid,
+      fileHash,
+      isbn: meta.isbn || null,
+      bookGroupId: null,
+      uploadedBy: {
+        uid,
+        displayName: profile.displayName,
+        email: profile.email,
+      },
+      uploadedAt: serverTimestamp(),
+      ratingSum: 0,
+      ratingCount: 0,
+    });
 
     onUpdate({ status: 'done', progress: 100 });
     return 'done';
