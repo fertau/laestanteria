@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
+import { useCollections } from '../hooks/useCollections';
 import { useFollows } from '../hooks/useFollows';
 import { useRatings } from '../hooks/useRatings';
 import { useReadingStatus } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import Stars from './Stars';
 import Avatar from './Avatar';
+import EditBookModal from './EditBookModal';
 
 const langLabels = {
   es: 'Espanol', en: 'Ingles', pt: 'Portugues',
@@ -23,6 +25,7 @@ const STATUS_OPTIONS = [
 export default function BookModal({ book, onClose }) {
   const { user } = useAuth();
   const { deleteBook } = useBooks();
+  const { collections, addBookToCollection, removeBookFromCollection } = useCollections();
   const { canDownloadFrom } = useFollows();
   const { myRating, rate, removeRating } = useRatings(book.id);
   const { status: readingStatus, setReadingStatus } = useReadingStatus(book.id);
@@ -31,6 +34,7 @@ export default function BookModal({ book, onClose }) {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const isOwner = book.uploadedBy?.uid === user?.uid;
   const canDownload = canDownloadFrom(book.uploadedBy?.uid);
@@ -69,6 +73,30 @@ export default function BookModal({ book, onClose }) {
     toast('Envio a Kindle se implementa en Fase 4 (Cloud Functions)', 'info');
   };
 
+  // Collections for this book
+  const bookCollections = collections.filter((c) => c.bookIds?.includes(book.id));
+  const availableCollections = collections.filter(
+    (c) => !c.bookIds?.includes(book.id) && c.createdBy?.uid === user?.uid
+  );
+
+  const handleAddToCollection = async (colId) => {
+    try {
+      await addBookToCollection(colId, book.id);
+      toast('Agregado a la coleccion', 'success');
+    } catch {
+      toast('Error al agregar', 'error');
+    }
+  };
+
+  const handleRemoveFromCollection = async (colId) => {
+    try {
+      await removeBookFromCollection(colId, book.id);
+      toast('Removido de la coleccion', 'info');
+    } catch {
+      toast('Error al remover', 'error');
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirmDelete) {
       setConfirmDelete(true);
@@ -89,7 +117,6 @@ export default function BookModal({ book, onClose }) {
   return (
     <div
       className="modal-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
       style={{
         position: 'fixed',
@@ -269,6 +296,70 @@ export default function BookModal({ book, onClose }) {
             </select>
           </div>
 
+          {/* Collections */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8 }}>
+              Colecciones
+            </div>
+            {bookCollections.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                {bookCollections.map((c) => (
+                  <span
+                    key={c.id}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      padding: '3px 8px',
+                      fontSize: 12,
+                    }}
+                  >
+                    {c.name}
+                    {c.createdBy?.uid === user?.uid && (
+                      <button
+                        onClick={() => handleRemoveFromCollection(c.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-dim)',
+                          fontSize: 12,
+                          padding: '0 2px',
+                          lineHeight: 1,
+                        }}
+                        title="Quitar de esta coleccion"
+                      >
+                        x
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {availableCollections.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) handleAddToCollection(e.target.value);
+                }}
+                style={{ fontSize: 12, minWidth: 180 }}
+              >
+                <option value="">+ Agregar a coleccion...</option>
+                {availableCollections.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+            {bookCollections.length === 0 && availableCollections.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                No hay colecciones disponibles
+              </span>
+            )}
+          </div>
+
           {/* Actions */}
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -299,19 +390,36 @@ export default function BookModal({ book, onClose }) {
               )}
 
               {isOwner && (
-                <button
-                  className={confirmDelete ? 'btn btn-danger' : 'btn btn-ghost'}
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  style={{ fontSize: 13, marginLeft: 'auto', color: confirmDelete ? '#fff' : 'var(--danger)' }}
-                >
-                  {deleting ? 'Eliminando...' : confirmDelete ? 'Confirmar eliminacion' : 'Eliminar libro'}
-                </button>
+                <>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowEdit(true)}
+                    style={{ fontSize: 13 }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className={confirmDelete ? 'btn btn-danger' : 'btn btn-ghost'}
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    style={{ fontSize: 13, marginLeft: 'auto', color: confirmDelete ? '#fff' : 'var(--danger)' }}
+                  >
+                    {deleting ? 'Eliminando...' : confirmDelete ? 'Confirmar eliminacion' : 'Eliminar libro'}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {showEdit && (
+        <EditBookModal
+          book={book}
+          onClose={() => setShowEdit(false)}
+          onSaved={onClose}
+        />
+      )}
     </div>
   );
 }

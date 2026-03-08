@@ -18,6 +18,7 @@ export default function CollectionDetail() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  const [addSearch, setAddSearch] = useState('');
 
   const col = collections.find((c) => c.id === id);
 
@@ -34,7 +35,20 @@ export default function CollectionDetail() {
     return books.filter((b) => !col.bookIds.includes(b.id));
   }, [col, books]);
 
+  const filteredAvailable = useMemo(() => {
+    if (!addSearch.trim()) return availableBooks.slice(0, 30);
+    const q = addSearch.toLowerCase().trim();
+    return availableBooks
+      .filter((b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [availableBooks, addSearch]);
+
   const isOwner = col?.createdBy?.uid === user?.uid;
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast('Link copiado al portapapeles', 'success');
+  };
 
   const handleAddBook = async (bookId) => {
     try {
@@ -108,15 +122,24 @@ export default function CollectionDetail() {
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <h1 className="page-title" style={{ marginBottom: 4 }}>{col.name}</h1>
-            {isOwner && (
+            <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className="btn btn-ghost"
                 style={{ fontSize: 12 }}
-                onClick={() => { setEditName(col.name); setEditDesc(col.description || ''); setEditing(true); }}
+                onClick={handleShare}
               >
-                Editar
+                Compartir
               </button>
-            )}
+              {isOwner && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12 }}
+                  onClick={() => { setEditName(col.name); setEditDesc(col.description || ''); setEditing(true); }}
+                >
+                  Editar
+                </button>
+              )}
+            </div>
           </div>
           {col.description && (
             <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{col.description}</p>
@@ -158,33 +181,76 @@ export default function CollectionDetail() {
       {isOwner && availableBooks.length > 0 && (
         <section>
           <h3 className="section-title">Agregar libros</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {availableBooks.slice(0, 20).map((b) => (
-              <div
-                key={b.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  background: 'var(--surface)',
-                  borderRadius: 'var(--radius)',
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{b.title}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{b.author}</span>
-                </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: 11, padding: '3px 10px' }}
-                  onClick={() => handleAddBook(b.id)}
-                >
-                  Agregar
-                </button>
+          <input
+            value={addSearch}
+            onChange={(e) => setAddSearch(e.target.value)}
+            placeholder="Buscar por titulo o autor..."
+            style={{ width: '100%', marginBottom: 10 }}
+          />
+          {filteredAvailable.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 12 }}>
+              No se encontraron libros
+            </p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {filteredAvailable.map((b) => (
+                  <div
+                    key={b.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 12px',
+                      background: 'var(--surface)',
+                      borderRadius: 'var(--radius)',
+                    }}
+                  >
+                    {b.coverUrl ? (
+                      <img
+                        src={b.coverUrl}
+                        alt=""
+                        style={{
+                          width: 30,
+                          height: 45,
+                          objectFit: 'cover',
+                          borderRadius: 3,
+                          flexShrink: 0,
+                        }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 30,
+                        height: 45,
+                        background: 'var(--bg)',
+                        borderRadius: 3,
+                        flexShrink: 0,
+                      }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {b.title}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.author}</div>
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }}
+                      onClick={() => handleAddBook(b.id)}
+                    >
+                      Agregar
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              {!addSearch.trim() && availableBooks.length > 30 && (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', marginTop: 8 }}>
+                  Usa el buscador para ver mas libros ({availableBooks.length} disponibles)
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
 

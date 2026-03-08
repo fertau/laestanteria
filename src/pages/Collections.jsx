@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useBooks } from '../hooks/useBooks';
 import { useCollections } from '../hooks/useCollections';
 import { useToast } from '../hooks/useToast';
 import Avatar from '../components/Avatar';
 
 export default function Collections() {
   const { user } = useAuth();
+  const { books } = useBooks();
   const { collections, loading, createCollection, deleteCollection } = useCollections();
   const { toast } = useToast();
+
+  const getCollectionCovers = (col) => {
+    if (!col.bookIds?.length) return [];
+    return col.bookIds
+      .map((bid) => books.find((b) => b.id === bid))
+      .filter((b) => b?.coverUrl)
+      .slice(0, 4)
+      .map((b) => b.coverUrl);
+  };
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -136,6 +147,28 @@ export default function Collections() {
                 e.currentTarget.style.boxShadow = 'none';
               }}
             >
+              {/* Cover previews */}
+              {(() => {
+                const covers = getCollectionCovers(col);
+                return covers.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                    {covers.map((url, i) => (
+                      <img
+                        key={i}
+                        src={url}
+                        alt=""
+                        style={{
+                          width: 40,
+                          height: 60,
+                          objectFit: 'cover',
+                          borderRadius: 3,
+                        }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                ) : null;
+              })()}
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>
                 {col.name}
               </h3>

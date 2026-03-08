@@ -5,6 +5,7 @@ import {
   where,
   onSnapshot,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   serverTimestamp,
@@ -111,6 +112,14 @@ export function useBooks() {
     [uid, profile, getAccessToken]
   );
 
+  // Update a book's metadata (only the uploader — enforced client-side)
+  const updateBook = useCallback(
+    async (bookId, updates) => {
+      await updateDoc(doc(db, 'books', bookId), updates);
+    },
+    []
+  );
+
   // Delete a book (only the uploader)
   const deleteBook = useCallback(
     async (bookId) => {
@@ -123,6 +132,7 @@ export function useBooks() {
     books: allBooks,
     loading,
     uploadBook,
+    updateBook,
     deleteBook,
     hasFollows: libraryFollowingUids.length > 0,
   };
