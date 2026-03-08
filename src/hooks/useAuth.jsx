@@ -42,15 +42,25 @@ export function AuthProvider({ children }) {
       }
 
       // Check if user has a profile in /users/{uid}
-      const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-      if (profileDoc.exists()) {
-        setState({
-          user: firebaseUser,
-          profile: { id: profileDoc.id, ...profileDoc.data() },
-          accessToken: state.accessToken,
-        });
-      } else {
-        // Authenticated but no profile — needs invite code
+      try {
+        const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (profileDoc.exists()) {
+          setState({
+            user: firebaseUser,
+            profile: { id: profileDoc.id, ...profileDoc.data() },
+            accessToken: state.accessToken,
+          });
+        } else {
+          // Authenticated but no profile — needs invite code
+          setState({
+            user: firebaseUser,
+            profile: null,
+            accessToken: state.accessToken,
+          });
+        }
+      } catch (err) {
+        console.error('Error checking profile:', err);
+        // Still set the user so they can navigate to invite code page
         setState({
           user: firebaseUser,
           profile: null,

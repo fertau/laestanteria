@@ -16,7 +16,10 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isRegistered();
+      // Allow authenticated users to read their OWN doc (needed to check if profile exists)
+      // Other users' profiles require isRegistered()
+      allow read: if request.auth != null &&
+        (request.auth.uid == uid || isRegistered());
       allow create: if request.auth != null &&
         request.auth.uid == uid;
       allow update: if isRegistered() &&
