@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { parseEpub } from '../lib/epubParser';
+import { parseFilename } from '../lib/parseFilename';
 import { fetchByISBN, searchByTitleAuthor as olSearch } from '../lib/openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch } from '../lib/googleBooks';
 
@@ -253,16 +254,27 @@ export default function UploadModal({ onClose }) {
       return;
     }
 
-    // --- Auto-extract metadata from EPUB ---
+    // --- Step 1: Smart filename parsing (always runs first) ---
+    const filenameMeta = parseFilename(f.name);
+    let fnTitle = filenameMeta.title || '';
+    let fnAuthor = filenameMeta.author || '';
+    let fnIsbn = filenameMeta.isbn || '';
+
+    // Pre-fill form with filename data immediately
+    if (fnTitle) setTitle(fnTitle);
+    if (fnAuthor) setAuthor(fnAuthor);
+    if (fnIsbn) setIsbn(fnIsbn);
+
+    // --- Step 2: Parse EPUB OPF metadata + cover ---
     setFetchingMeta(true);
     try {
       const epubMeta = await parseEpub(f);
 
       if (epubMeta) {
-        // Fill in what the EPUB provides
-        if (epubMeta.title) setTitle(epubMeta.title);
-        if (epubMeta.author) setAuthor(epubMeta.author);
-        if (epubMeta.isbn) setIsbn(epubMeta.isbn);
+        // OPF data overrides filename data (more reliable when available)
+        if (epubMeta.title) { setTitle(epubMeta.title); fnTitle = epubMeta.title; }
+        if (epubMeta.author) { setAuthor(epubMeta.author); fnAuthor = epubMeta.author; }
+        if (epubMeta.isbn) { setIsbn(epubMeta.isbn); fnIsbn = epubMeta.isbn; }
         if (epubMeta.description) setDescription(epubMeta.description);
         if (epubMeta.language) setLanguage(epubMeta.language);
         if (epubMeta.coverObjectUrl) setEpubCoverUrl(epubMeta.coverObjectUrl);
@@ -273,38 +285,33 @@ export default function UploadModal({ onClose }) {
 
         setMetaSource('epub');
         toast('Metadata extraida del EPUB', 'success');
+      }
 
-        // Now enrich with external APIs (runs in background)
-        const enriched = await enrichMetadata(epubMeta);
+      // --- Step 3: Enrich with APIs using best available data ---
+      // Use whichever source gave us data (EPUB overrides filename)
+      const bestTitle = fnTitle;
+      const bestAuthor = fnAuthor;
+      const bestIsbn = fnIsbn;
+
+      if (bestTitle || bestIsbn) {
+        const enriched = await enrichMetadata({
+          title: bestTitle,
+          author: bestAuthor,
+          isbn: bestIsbn,
+        });
         if (enriched) {
           toast('Metadata completada con APIs externas', 'success');
         }
-      } else {
-        // No EPUB metadata — try filename parsing as fallback
-        const nameWithoutExt = f.name.replace(/\.epub$/i, '');
-        const parts = nameWithoutExt.split(' - ');
-        if (parts.length >= 2) {
-          setAuthor(parts[0].trim());
-          setTitle(parts.slice(1).join(' - ').trim());
-        } else {
-          setTitle(nameWithoutExt);
-        }
-
-        // Try to search APIs with filename-derived title
-        const fallbackTitle = parts.length >= 2 ? parts.slice(1).join(' - ').trim() : nameWithoutExt;
-        const fallbackAuthor = parts.length >= 2 ? parts[0].trim() : '';
-        await enrichMetadata({ title: fallbackTitle, author: fallbackAuthor, isbn: '' });
       }
     } catch (err) {
-      console.warn('EPUB parsing failed, falling back to filename:', err);
-      // Fallback to filename parsing
-      const nameWithoutExt = f.name.replace(/\.epub$/i, '');
-      const parts = nameWithoutExt.split(' - ');
-      if (parts.length >= 2) {
-        setAuthor(parts[0].trim());
-        setTitle(parts.slice(1).join(' - ').trim());
-      } else {
-        setTitle(nameWithoutExt);
+      console.warn('EPUB parsing failed, searching APIs with filename data:', err);
+      // EPUB parse failed but we still have filename data — try APIs
+      if (fnTitle || fnIsbn) {
+        try {
+          await enrichMetadata({ title: fnTitle, author: fnAuthor, isbn: fnIsbn });
+        } catch {
+          // Silently fail
+        }
       }
     } finally {
       setFetchingMeta(false);
