@@ -3,7 +3,9 @@ import { collection, query, where, getDocs, updateDoc, doc as docRef } from 'fir
 import { db } from '../lib/firebase';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
-import { fetchByISBN } from '../lib/openLibrary';
+import { parseEpub } from '../lib/epubParser';
+import { fetchByISBN, searchByTitleAuthor as olSearch } from '../lib/openLibrary';
+import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch } from '../lib/googleBooks';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -64,7 +66,8 @@ export default function UploadModal({ onClose }) {
   const [fileHash, setFileHash] = useState(null);
 
   const [isbn, setIsbn] = useState('');
-  const [fetchingISBN, setFetchingISBN] = useState(false);
+  const [fetchingMeta, setFetchingMeta] = useState(false);
+  const [metaSource, setMetaSource] = useState(null); // 'epub' | 'google' | 'openlibrary' | null
 
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -72,21 +75,145 @@ export default function UploadModal({ onClose }) {
   const [language, setLanguage] = useState('es');
   const [description, setDescription] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [epubCoverUrl, setEpubCoverUrl] = useState(''); // Object URL from EPUB cover
 
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
   // Duplicate detection state
-  const [dupCheck, setDupCheck] = useState(null); // { type, match, bookGroupId? }
-  const [dupAction, setDupAction] = useState(null); // 'skip' | 'group' | 'proceed'
+  const [dupCheck, setDupCheck] = useState(null);
+  const [dupAction, setDupAction] = useState(null);
 
-  // Validate EPUB file
+  /**
+   * Search external APIs for metadata using title+author or ISBN.
+   * Merges results: EPUB metadata → Google Books → Open Library
+   * Only fills in empty fields (doesn't overwrite what the EPUB already provided).
+   */
+  const enrichMetadata = async (epubMeta) => {
+    const currentTitle = epubMeta?.title || '';
+    const currentAuthor = epubMeta?.author || '';
+    const currentISBN = epubMeta?.isbn || '';
+
+    let apiResults = [];
+
+    // Search in parallel: Google Books + Open Library
+    const searches = [];
+
+    if (currentISBN) {
+      searches.push(gbISBN(currentISBN));
+      searches.push(fetchByISBN(currentISBN));
+    }
+    if (currentTitle) {
+      searches.push(gbSearch(currentTitle, currentAuthor));
+      searches.push(olSearch(currentTitle, currentAuthor));
+    }
+
+    if (searches.length === 0) return;
+
+    try {
+      const results = await Promise.allSettled(searches);
+      apiResults = results
+        .filter((r) => r.status === 'fulfilled' && r.value)
+        .map((r) => r.value);
+    } catch {
+      // Silently fail — EPUB metadata is enough
+    }
+
+    if (apiResults.length === 0) return;
+
+    // Merge: fill in what's missing
+    // Priority: what's already set > Google Books > Open Library
+    let enriched = false;
+
+    for (const result of apiResults) {
+      if (!title && result.title) {
+        setTitle(result.title);
+        enriched = true;
+      }
+      if (!author && result.author) {
+        setAuthor(result.author);
+        enriched = true;
+      }
+      if (!description && result.description) {
+        setDescription(result.description);
+        enriched = true;
+      }
+      if (!coverUrl && !epubCoverUrl && result.coverUrl) {
+        setCoverUrl(result.coverUrl);
+        enriched = true;
+      }
+      // Prefer API cover over EPUB cover (usually higher quality)
+      if (epubCoverUrl && !coverUrl && result.coverUrl) {
+        setCoverUrl(result.coverUrl);
+        enriched = true;
+      }
+      if (!genre && result.genre) {
+        // Try to map to our genre list
+        const mapped = mapGenre(result.genre);
+        if (mapped) {
+          setGenre(mapped);
+          enriched = true;
+        }
+      }
+      if (!isbn && result.isbn) {
+        setIsbn(result.isbn);
+        enriched = true;
+      }
+      if (result.language && language === 'es') {
+        // Only override default if API gives a different language
+        if (result.language !== 'es') {
+          setLanguage(result.language);
+          enriched = true;
+        }
+      }
+    }
+
+    // Track which source provided the most data
+    const bestSource = apiResults[0]?.source || null;
+    if (enriched && bestSource) {
+      setMetaSource(bestSource);
+    }
+
+    return enriched;
+  };
+
+  /**
+   * Try to map a free-text genre string to one of our GENRES.
+   */
+  const mapGenre = (genreStr) => {
+    if (!genreStr) return '';
+    const g = genreStr.toLowerCase();
+    const mapping = [
+      [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
+      [/non.?fic|no.?ficc/i, 'No ficcion'],
+      [/sci.?fi|science.?fic|ciencia.?fic/i, 'Ciencia ficcion'],
+      [/fantas[yí]/i, 'Fantasia'],
+      [/myster|thriller|suspens|misterio/i, 'Misterio'],
+      [/roman[ct]/i, 'Romance'],
+      [/histor/i, 'Historia'],
+      [/scien[ct]|ciencia/i, 'Ciencia'],
+      [/philos|filosof/i, 'Filosofia'],
+      [/biograph|biograf|memoir/i, 'Biografia'],
+      [/self.?help|autoayuda|personal/i, 'Autoayuda'],
+      [/business|negocio|econom|financ/i, 'Negocios'],
+      [/art(?!if)/i, 'Arte'],
+      [/poet|poes/i, 'Poesia'],
+      [/child|infant|juvenil|kid/i, 'Infantil'],
+    ];
+    for (const [regex, mapped] of mapping) {
+      if (regex.test(g)) return mapped;
+    }
+    return '';
+  };
+
+  // Validate EPUB file + auto-extract metadata
   const validateFile = async (f) => {
     setFileError(null);
     setFile(null);
     setFileHash(null);
     setDupCheck(null);
     setDupAction(null);
+    setMetaSource(null);
 
     if (!f.name.toLowerCase().endsWith('.epub')) {
       setFileError('Solo se admiten archivos EPUB. Los PDF no son compatibles con Kindle.');
@@ -115,18 +242,6 @@ export default function UploadModal({ onClose }) {
     setFile(f);
     setFileHash(hashHex);
 
-    // Try to extract title from filename
-    const nameWithoutExt = f.name.replace(/\.epub$/i, '');
-    if (!title) {
-      const parts = nameWithoutExt.split(' - ');
-      if (parts.length >= 2) {
-        setAuthor(parts[0].trim());
-        setTitle(parts.slice(1).join(' - ').trim());
-      } else {
-        setTitle(nameWithoutExt);
-      }
-    }
-
     // Level 1: Check for exact hash match
     const hashMatch = books.find((b) => b.fileHash === hashHex);
     if (hashMatch) {
@@ -136,6 +251,63 @@ export default function UploadModal({ onClose }) {
         message: `Este archivo ya existe: "${hashMatch.title}" de ${hashMatch.author}`,
       });
       return;
+    }
+
+    // --- Auto-extract metadata from EPUB ---
+    setFetchingMeta(true);
+    try {
+      const epubMeta = await parseEpub(f);
+
+      if (epubMeta) {
+        // Fill in what the EPUB provides
+        if (epubMeta.title) setTitle(epubMeta.title);
+        if (epubMeta.author) setAuthor(epubMeta.author);
+        if (epubMeta.isbn) setIsbn(epubMeta.isbn);
+        if (epubMeta.description) setDescription(epubMeta.description);
+        if (epubMeta.language) setLanguage(epubMeta.language);
+        if (epubMeta.coverObjectUrl) setEpubCoverUrl(epubMeta.coverObjectUrl);
+        if (epubMeta.subjects?.length) {
+          const mapped = mapGenre(epubMeta.subjects.join(', '));
+          if (mapped) setGenre(mapped);
+        }
+
+        setMetaSource('epub');
+        toast('Metadata extraida del EPUB', 'success');
+
+        // Now enrich with external APIs (runs in background)
+        const enriched = await enrichMetadata(epubMeta);
+        if (enriched) {
+          toast('Metadata completada con APIs externas', 'success');
+        }
+      } else {
+        // No EPUB metadata — try filename parsing as fallback
+        const nameWithoutExt = f.name.replace(/\.epub$/i, '');
+        const parts = nameWithoutExt.split(' - ');
+        if (parts.length >= 2) {
+          setAuthor(parts[0].trim());
+          setTitle(parts.slice(1).join(' - ').trim());
+        } else {
+          setTitle(nameWithoutExt);
+        }
+
+        // Try to search APIs with filename-derived title
+        const fallbackTitle = parts.length >= 2 ? parts.slice(1).join(' - ').trim() : nameWithoutExt;
+        const fallbackAuthor = parts.length >= 2 ? parts[0].trim() : '';
+        await enrichMetadata({ title: fallbackTitle, author: fallbackAuthor, isbn: '' });
+      }
+    } catch (err) {
+      console.warn('EPUB parsing failed, falling back to filename:', err);
+      // Fallback to filename parsing
+      const nameWithoutExt = f.name.replace(/\.epub$/i, '');
+      const parts = nameWithoutExt.split(' - ');
+      if (parts.length >= 2) {
+        setAuthor(parts[0].trim());
+        setTitle(parts.slice(1).join(' - ').trim());
+      } else {
+        setTitle(nameWithoutExt);
+      }
+    } finally {
+      setFetchingMeta(false);
     }
   };
 
@@ -159,7 +331,6 @@ export default function UploadModal({ onClose }) {
       for (const b of books) {
         const titleSim = similarity(title, b.title);
         const authorSim = similarity(author, b.author);
-        // Both title and author must be >80% similar
         if (titleSim > 0.8 && authorSim > 0.8) {
           return {
             type: 'fuzzy',
@@ -184,25 +355,85 @@ export default function UploadModal({ onClose }) {
     if (f) validateFile(f);
   };
 
+  // Manual ISBN search
   const handleISBNSearch = async () => {
     if (!isbn.trim()) return;
-    setFetchingISBN(true);
+    setFetchingMeta(true);
     try {
-      const data = await fetchByISBN(isbn);
-      if (data) {
-        if (data.title) setTitle(data.title);
-        if (data.author) setAuthor(data.author);
-        if (data.description) setDescription(data.description);
-        if (data.coverUrl) setCoverUrl(data.coverUrl);
-        if (data.genre) setGenre(data.genre);
-        toast('Metadata encontrada en Open Library', 'success');
+      // Search both APIs in parallel
+      const [olResult, gbResult] = await Promise.allSettled([
+        fetchByISBN(isbn),
+        gbISBN(isbn),
+      ]);
+
+      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
+      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
+
+      // Prefer Google Books for cover, merge both
+      const best = gb || ol;
+      if (best) {
+        if (best.title && !title) setTitle(best.title);
+        if (best.author && !author) setAuthor(best.author);
+        if (best.description && !description) setDescription(best.description);
+        if (best.genre) {
+          const mapped = mapGenre(best.genre);
+          if (mapped && !genre) setGenre(mapped);
+        }
+
+        // Cover: prefer Google Books (higher quality), fall back to Open Library
+        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
+        if (bestCover) setCoverUrl(bestCover);
+
+        if (best.language) setLanguage(best.language);
+
+        setMetaSource(best.source);
+        toast('Metadata encontrada!', 'success');
       } else {
-        toast('No se encontro el ISBN en Open Library', 'info');
+        toast('No se encontro el ISBN en ninguna base de datos', 'info');
       }
     } catch {
       toast('Error al buscar ISBN', 'error');
     } finally {
-      setFetchingISBN(false);
+      setFetchingMeta(false);
+    }
+  };
+
+  // Manual search by title+author
+  const handleTitleSearch = async () => {
+    if (!title.trim()) return;
+    setFetchingMeta(true);
+    try {
+      const [gbResult, olResult] = await Promise.allSettled([
+        gbSearch(title, author),
+        olSearch(title, author),
+      ]);
+
+      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
+      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
+
+      const best = gb || ol;
+      if (best) {
+        if (best.description && !description) setDescription(best.description);
+        if (best.genre) {
+          const mapped = mapGenre(best.genre);
+          if (mapped && !genre) setGenre(mapped);
+        }
+
+        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
+        if (bestCover) setCoverUrl(bestCover);
+
+        if (best.isbn && !isbn) setIsbn(best.isbn);
+        if (best.language) setLanguage(best.language);
+
+        setMetaSource(best.source);
+        toast('Metadata encontrada!', 'success');
+      } else {
+        toast('No se encontraron resultados', 'info');
+      }
+    } catch {
+      toast('Error al buscar metadata', 'error');
+    } finally {
+      setFetchingMeta(false);
     }
   };
 
@@ -221,16 +452,18 @@ export default function UploadModal({ onClose }) {
       const dup = await checkDuplicates();
       if (dup) {
         setDupCheck(dup);
-        return; // Wait for user to choose action
+        return;
       }
     }
 
     // Determine bookGroupId
     let bookGroupId = null;
     if (dupAction === 'group' && dupCheck?.match) {
-      // Use existing book's group or create a new shared one
       bookGroupId = dupCheck.match.bookGroupId || crypto.randomUUID();
     }
+
+    // Use the best available cover URL
+    const finalCoverUrl = coverUrl || epubCoverUrl || '';
 
     setUploading(true);
     setProgress(0);
@@ -241,7 +474,7 @@ export default function UploadModal({ onClose }) {
         genre,
         language,
         description: description.trim(),
-        coverUrl,
+        coverUrl: finalCoverUrl,
         fileHash,
         isbn: isbn.trim() || null,
         bookGroupId,
@@ -260,6 +493,9 @@ export default function UploadModal({ onClose }) {
       setUploading(false);
     }
   };
+
+  // Determine which cover to show in preview
+  const previewCover = coverUrl || epubCoverUrl || '';
 
   return (
     <div
@@ -358,6 +594,42 @@ export default function UploadModal({ onClose }) {
             </div>
           )}
 
+          {/* Metadata extraction status */}
+          {fetchingMeta && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 16,
+              padding: '10px 14px',
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+              fontSize: 13,
+              color: 'var(--text-muted)',
+            }}>
+              <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+              Buscando metadata...
+            </div>
+          )}
+
+          {metaSource && !fetchingMeta && (
+            <div style={{
+              fontSize: 12,
+              color: 'var(--success)',
+              marginBottom: 12,
+              padding: '6px 10px',
+              background: 'rgba(39,174,96,0.1)',
+              borderRadius: 'var(--radius)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <span>✓</span>
+              Metadata {metaSource === 'epub' ? 'extraida del EPUB' :
+                metaSource === 'google' ? 'de Google Books' : 'de Open Library'}
+            </div>
+          )}
+
           {/* Duplicate warning */}
           {dupCheck && !dupAction && (
             <div style={{
@@ -431,6 +703,56 @@ export default function UploadModal({ onClose }) {
             </div>
           )}
 
+          {/* Cover preview + metadata side by side */}
+          {previewCover && (
+            <div style={{
+              display: 'flex',
+              gap: 16,
+              marginBottom: 16,
+              padding: 12,
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+            }}>
+              <img
+                src={previewCover}
+                alt="Portada"
+                style={{
+                  width: 80,
+                  height: 120,
+                  objectFit: 'cover',
+                  borderRadius: 4,
+                  flexShrink: 0,
+                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {title && (
+                  <div style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    marginBottom: 4,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {title}
+                  </div>
+                )}
+                {author && (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    {author}
+                  </div>
+                )}
+                {isbn && (
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                    ISBN: {isbn}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ISBN */}
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
@@ -446,11 +768,11 @@ export default function UploadModal({ onClose }) {
               <button
                 type="button"
                 onClick={handleISBNSearch}
-                disabled={fetchingISBN || !isbn.trim()}
+                disabled={fetchingMeta || !isbn.trim()}
                 className="btn btn-secondary"
                 style={{ fontSize: 13 }}
               >
-                {fetchingISBN ? '...' : 'Buscar'}
+                {fetchingMeta ? '...' : 'Buscar'}
               </button>
             </div>
           </div>
@@ -460,12 +782,26 @@ export default function UploadModal({ onClose }) {
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               Titulo *
             </label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              style={{ width: '100%' }}
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                style={{ flex: 1 }}
+              />
+              {title.trim() && !fetchingMeta && (
+                <button
+                  type="button"
+                  onClick={handleTitleSearch}
+                  disabled={fetchingMeta}
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  title="Buscar metadata por titulo y autor"
+                >
+                  Buscar metadata
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Author */}
@@ -536,16 +872,13 @@ export default function UploadModal({ onClose }) {
             <input
               value={coverUrl}
               onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder="https://..."
+              placeholder={epubCoverUrl ? 'Se usara la portada del EPUB' : 'https://...'}
               style={{ width: '100%' }}
             />
-            {coverUrl && (
-              <img
-                src={coverUrl}
-                alt="Preview"
-                style={{ marginTop: 8, height: 80, borderRadius: 4 }}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
+            {!previewCover && !coverUrl && (
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                Se detectara automaticamente del EPUB o de APIs externas
+              </div>
             )}
           </div>
 
@@ -575,7 +908,7 @@ export default function UploadModal({ onClose }) {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={uploading || !file || !title.trim() || !author.trim() || (dupCheck?.type === 'hash' && !dupAction)}
+              disabled={uploading || !file || !title.trim() || !author.trim() || (dupCheck?.type === 'hash' && !dupAction) || fetchingMeta}
             >
               {uploading ? `Subiendo... ${progress}%` : 'Subir libro'}
             </button>
