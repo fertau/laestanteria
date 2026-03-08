@@ -194,3 +194,113 @@ input:focus, textarea:focus, select:focus {
   font-size: 32px;
   color: var(--accent);
 }
+
+/* ─── Responsive ─── */
+
+@media (max-width: 640px) {
+  .page {
+    padding: 16px 12px 80px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+
+  .btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  input, textarea, select {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
+
+/* ─── Animations ─── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+.slide-up {
+  animation: slideUp 0.4s ease both;
+}
+
+/* ─── Bottom nav on mobile ─── */
+
+@media (max-width: 640px) {
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(15, 12, 8, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-around;
+    padding: 6px 0 env(safe-area-inset-bottom, 6px);
+  }
+
+  .bottom-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 8px;
+  }
+
+  .bottom-nav a.active {
+    color: var(--accent);
+  }
+
+  .bottom-nav .nav-icon {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 641px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
+/* ─── Focus visible ─── */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Selection ─── */
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}

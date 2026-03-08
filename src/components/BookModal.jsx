@@ -88,6 +88,7 @@ export default function BookModal({ book, onClose }) {
 
   return (
     <div
+      className="modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
       style={{

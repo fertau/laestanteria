@@ -3,6 +3,7 @@ import { AuthProvider } from './hooks/useAuth';
 import { FollowsProvider } from './hooks/useFollows';
 import { ToastProvider } from './hooks/useToast';
 import Header from './components/Header';
+import BottomNav from './components/BottomNav';
 import ToastContainer from './components/Toast';
 import PrivateRoute from './components/PrivateRoute';
 
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/profile/:uid" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
           </Routes>
+          <BottomNav />
           <ToastContainer />
         </ToastProvider>
         </FollowsProvider>
