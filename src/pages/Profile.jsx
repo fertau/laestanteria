@@ -1,13 +1,21 @@
-import { useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { useBooks } from '../hooks/useBooks';
+import { useFollows } from '../hooks/useFollows';
+import { useAllReadingStatuses } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
+import BookGrid from '../components/BookGrid';
+import BookModal from '../components/BookModal';
 
 export default function Profile() {
   const { uid } = useParams();
   const { user, profile, updateProfile, generateInviteCode, getMyInviteCodes } = useAuth();
+  const { books } = useBooks();
+  const { following, followers } = useFollows();
+  const { wantToRead, reading, finished } = useAllReadingStatuses();
   const { toast } = useToast();
   const isOwnProfile = user?.uid === uid;
 
@@ -15,6 +23,27 @@ export default function Profile() {
   const [kindleEmail, setKindleEmail] = useState('');
   const [inviteCodes, setInviteCodes] = useState([]);
   const [generatedCode, setGeneratedCode] = useState(null);
+  const [selectedBook, setSelectedBook] = useState(null);
+
+  // Books uploaded by this user
+  const myBooks = useMemo(
+    () => books.filter((b) => b.uploadedBy?.uid === uid),
+    [books, uid]
+  );
+
+  // Reading status books (resolve IDs to book objects)
+  const wantBooks = useMemo(
+    () => wantToRead.map((id) => books.find((b) => b.id === id)).filter(Boolean),
+    [wantToRead, books]
+  );
+  const readingBooks = useMemo(
+    () => reading.map((id) => books.find((b) => b.id === id)).filter(Boolean),
+    [reading, books]
+  );
+  const finishedBooks = useMemo(
+    () => finished.map((id) => books.find((b) => b.id === id)).filter(Boolean),
+    [finished, books]
+  );
 
   useEffect(() => {
     if (isOwnProfile && profile) {
@@ -111,6 +140,55 @@ export default function Profile() {
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{profileData.email}</p>
         </div>
       </div>
+
+      {/* Stats overview */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+        gap: 8,
+        marginBottom: 32,
+      }}>
+        <MiniStat label="Subidos" value={myBooks.length} />
+        {isOwnProfile && (
+          <>
+            <MiniStat label="Quiero leer" value={wantToRead.length} />
+            <MiniStat label="Leyendo" value={reading.length} />
+            <MiniStat label="Leidos" value={finished.length} />
+            <MiniStat label="Siguiendo" value={following.length} />
+            <MiniStat label="Seguidores" value={followers.length} />
+          </>
+        )}
+      </div>
+
+      {/* My uploaded books */}
+      {myBooks.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2 className="section-title">Libros subidos</h2>
+          <BookGrid books={myBooks} onBookClick={setSelectedBook} />
+        </section>
+      )}
+
+      {/* Reading status sections (own profile only) */}
+      {isOwnProfile && readingBooks.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2 className="section-title">Leyendo</h2>
+          <BookGrid books={readingBooks} onBookClick={setSelectedBook} />
+        </section>
+      )}
+
+      {isOwnProfile && wantBooks.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2 className="section-title">Quiero leer</h2>
+          <BookGrid books={wantBooks} onBookClick={setSelectedBook} />
+        </section>
+      )}
+
+      {isOwnProfile && finishedBooks.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2 className="section-title">Leidos</h2>
+          <BookGrid books={finishedBooks} onBookClick={setSelectedBook} />
+        </section>
+      )}
 
       {/* Own profile sections */}
       {isOwnProfile && (
@@ -247,6 +325,23 @@ export default function Profile() {
           </div>
         </>
       )}
+      {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      borderRadius: 'var(--radius)',
+      padding: '12px 8px',
+      textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
     </div>
   );
 }
