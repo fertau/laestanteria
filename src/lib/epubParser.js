@@ -197,7 +197,7 @@ function findCoverHref(opfDoc) {
 /**
  * Strip HTML tags from description text (some EPUBs have HTML in dc:description)
  */
-function cleanHtml(text) {
+export function cleanHtml(text) {
   if (!text) return '';
   // Remove HTML tags
   const cleaned = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();

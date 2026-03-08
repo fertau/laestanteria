@@ -3,6 +3,7 @@ import { useBooks } from '../hooks/useBooks';
 import BookGrid from '../components/BookGrid';
 import BookModal from '../components/BookModal';
 import UploadModal from '../components/UploadModal';
+import ImportModal from '../components/ImportModal';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -35,6 +36,7 @@ export default function Catalog() {
   const [langFilter, setLangFilter] = useState('');
   const [sortBy, setSortBy] = useState('recent');
   const [showUpload, setShowUpload] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
 
   const filtered = useMemo(() => {
@@ -105,12 +107,20 @@ export default function Catalog() {
         gap: 12,
       }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Catalogo</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowUpload(true)}
-        >
-          + Subir libro
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowUpload(true)}
+          >
+            + Subir libro
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowImport(true)}
+          >
+            Importar
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -203,6 +213,7 @@ export default function Catalog() {
       )}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
   );
