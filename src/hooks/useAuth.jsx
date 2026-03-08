@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut as fbSignOut,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import {
   doc,
@@ -19,6 +20,26 @@ import {
 import { auth, db, googleProvider } from '../lib/firebase';
 
 const AuthContext = createContext(null);
+
+/**
+ * Extract Google OAuth access token from a Firebase sign-in result.
+ * Uses the official GoogleAuthProvider API (not internal _tokenResponse).
+ */
+function extractAccessToken(result) {
+  // Method 1: Official API (preferred)
+  try {
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) return credential.accessToken;
+  } catch {
+    // Fall through to method 2
+  }
+
+  // Method 2: Internal field (fallback for older Firebase versions)
+  const token = result?._tokenResponse?.oauthAccessToken;
+  if (token) return token;
+
+  return null;
+}
 
 /**
  * Auth states:
@@ -45,27 +66,26 @@ export function AuthProvider({ children }) {
       try {
         const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (profileDoc.exists()) {
-          setState({
+          setState((prev) => ({
             user: firebaseUser,
             profile: { id: profileDoc.id, ...profileDoc.data() },
-            accessToken: state.accessToken,
-          });
+            accessToken: prev.accessToken, // Preserve existing token
+          }));
         } else {
           // Authenticated but no profile — needs invite code
-          setState({
+          setState((prev) => ({
             user: firebaseUser,
             profile: null,
-            accessToken: state.accessToken,
-          });
+            accessToken: prev.accessToken,
+          }));
         }
       } catch (err) {
         console.error('Error checking profile:', err);
-        // Still set the user so they can navigate to invite code page
-        setState({
+        setState((prev) => ({
           user: firebaseUser,
           profile: null,
-          accessToken: state.accessToken,
-        });
+          accessToken: prev.accessToken,
+        }));
       }
     });
     return unsub;
@@ -74,13 +94,17 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      // Extract Google OAuth access token for Drive API
-      const credential = result._tokenResponse;
-      const oauthToken = credential?.oauthAccessToken || null;
-      setState((prev) => ({ ...prev, accessToken: oauthToken }));
+      const oauthToken = extractAccessToken(result);
+      if (oauthToken) {
+        setState((prev) => ({ ...prev, accessToken: oauthToken }));
+      }
       return result;
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user') return null;
+      if (err.code === 'auth/popup-blocked') {
+        console.warn('Popup blocked — user may need to allow popups');
+        return null;
+      }
       throw err;
     }
   }, []);
@@ -136,7 +160,7 @@ export function AuthProvider({ children }) {
   const generateInviteCode = useCallback(async () => {
     if (!state.user || !state.profile) throw new Error('No autenticado');
 
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I, O, 0, 1 to avoid confusion
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 8; i++) {
       code += chars[Math.floor(Math.random() * chars.length)];
@@ -174,15 +198,39 @@ export function AuthProvider({ children }) {
     [state.user]
   );
 
-  // Refresh access token when needed
+  /**
+   * Get a valid Google Drive access token.
+   * If the current token is missing or expired, prompts a re-sign-in.
+   * Google OAuth tokens expire after ~1 hour.
+   */
   const getAccessToken = useCallback(async () => {
-    if (state.accessToken) return state.accessToken;
-    // Re-sign in to get a fresh token
-    const result = await signInWithPopup(auth, googleProvider);
-    const credential = result._tokenResponse;
-    const token = credential?.oauthAccessToken || null;
-    setState((prev) => ({ ...prev, accessToken: token }));
-    return token;
+    // If we have a token, test it with a lightweight Drive API call
+    if (state.accessToken) {
+      try {
+        const testRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+          headers: { Authorization: `Bearer ${state.accessToken}` },
+        });
+        if (testRes.ok) return state.accessToken;
+        // Token expired or invalid — fall through to re-authenticate
+        console.warn('Drive token expired, re-authenticating...');
+      } catch {
+        // Network error — try using the token anyway
+        return state.accessToken;
+      }
+    }
+
+    // No token or expired — re-sign in to get a fresh one
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const token = extractAccessToken(result);
+      if (token) {
+        setState((prev) => ({ ...prev, accessToken: token }));
+      }
+      return token;
+    } catch (err) {
+      console.error('Failed to get Drive access token:', err);
+      return null;
+    }
   }, [state.accessToken]);
 
   const value = {
