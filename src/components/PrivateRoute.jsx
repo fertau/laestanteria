@@ -1,5 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import Logo from './Logo';
+import NameLogo from './NameLogo';
 
 export default function PrivateRoute({ children }) {
   const { user, profile, isLoading } = useAuth();
@@ -7,7 +9,8 @@ export default function PrivateRoute({ children }) {
   if (isLoading) {
     return (
       <div className="loading-screen">
-        <div className="logo">La estanteria</div>
+        <Logo size={48} />
+        <NameLogo size="md" />
         <div className="spinner" />
       </div>
     );

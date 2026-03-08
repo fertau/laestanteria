@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useCollections } from '../hooks/useCollections';
@@ -35,6 +35,10 @@ export default function BookModal({ book, onClose }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+
+  // Click-outside protection: only close if mousedown AND mouseup both hit the overlay
+  // (prevents close when user scrolls or drags accidentally)
+  const mouseDownTarget = useRef(null);
 
   const isOwner = book.uploadedBy?.uid === user?.uid;
   const canDownload = canDownloadFrom(book.uploadedBy?.uid);
@@ -117,6 +121,14 @@ export default function BookModal({ book, onClose }) {
   return (
     <div
       className="modal-overlay"
+      onMouseDown={(e) => { mouseDownTarget.current = e.target; }}
+      onMouseUp={(e) => {
+        // Close only if BOTH mousedown and mouseup happened on the overlay itself
+        if (e.target === e.currentTarget && mouseDownTarget.current === e.currentTarget) {
+          onClose();
+        }
+        mouseDownTarget.current = null;
+      }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
       style={{
         position: 'fixed',

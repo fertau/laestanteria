@@ -469,8 +469,9 @@ export default function UploadModal({ onClose }) {
       bookGroupId = dupCheck.match.bookGroupId || crypto.randomUUID();
     }
 
-    // Use the best available cover URL
-    const finalCoverUrl = coverUrl || epubCoverUrl || '';
+    // Use the best available cover URL (never save blob: URLs — they break on reload)
+    const rawCover = coverUrl || epubCoverUrl || '';
+    const finalCoverUrl = rawCover.startsWith('blob:') ? '' : rawCover;
 
     setUploading(true);
     setProgress(0);

@@ -302,7 +302,7 @@ export async function processQueueItem(item, context, onUpdate) {
       genre: meta.genre || '',
       language: meta.language || 'es',
       description: (meta.description || '').trim(),
-      coverUrl: meta.coverUrl || '',
+      coverUrl: (meta.coverUrl && !meta.coverUrl.startsWith('blob:')) ? meta.coverUrl : '',
       driveFileId,
       driveOwnerUid: uid,
       fileHash,
