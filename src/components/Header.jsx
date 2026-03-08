@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import Logo from './Logo';
+import NameLogo from './NameLogo';
 
 const navItems = [
   { path: '/', label: 'Inicio', icon: '~' },
@@ -20,8 +22,8 @@ export default function Header({ notificationCount = 0 }) {
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      background: 'rgba(15, 12, 8, 0.85)',
-      backdropFilter: 'blur(12px)',
+      background: 'rgba(15, 12, 8, 0.9)',
+      backdropFilter: 'blur(16px)',
       borderBottom: '1px solid var(--border)',
     }}>
       <div style={{
@@ -33,21 +35,24 @@ export default function Header({ notificationCount = 0 }) {
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
+        {/* Logo + Name */}
         <Link to="/" style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 20,
-          fontWeight: 700,
-          color: 'var(--accent)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
           textDecoration: 'none',
         }}>
-          La estanteria
+          <Logo size={30} />
+          <NameLogo size="sm" className="name-logo-header" />
         </Link>
 
+        {/* Navigation */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
+              title={item.label}
               style={{
                 padding: '6px 12px',
                 borderRadius: 'var(--radius)',
@@ -64,6 +69,7 @@ export default function Header({ notificationCount = 0 }) {
 
           <Link
             to="/notifications"
+            title="Notificaciones"
             style={{
               position: 'relative',
               padding: '6px 10px',
@@ -95,6 +101,7 @@ export default function Header({ notificationCount = 0 }) {
           </Link>
         </nav>
 
+        {/* User section */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link
             to={`/profile/${profile.id}`}
@@ -147,6 +154,7 @@ export default function Header({ notificationCount = 0 }) {
       <style>{`
         @media (max-width: 640px) {
           .nav-label { display: none; }
+          .name-logo-header { display: none; }
         }
       `}</style>
     </header>

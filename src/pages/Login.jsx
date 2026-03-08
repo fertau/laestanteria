@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import Logo from '../components/Logo';
+import NameLogo from '../components/NameLogo';
 
 export default function Login() {
   const { signIn, user, profile } = useAuth();
@@ -34,23 +36,25 @@ export default function Login() {
       padding: 20,
       textAlign: 'center',
     }}>
-      <div style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: 48,
-        fontWeight: 700,
-        color: 'var(--accent)',
-        marginBottom: 8,
-      }}>
-        La estanteria
+      {/* Logo SVG grande */}
+      <Logo size={80} />
+
+      {/* Name Logo tipográfico */}
+      <div style={{ marginTop: 16, marginBottom: 12 }}>
+        <NameLogo size="lg" />
       </div>
 
+      {/* Subtítulo */}
       <p style={{
         color: 'var(--text-muted)',
-        fontSize: 16,
+        fontSize: 15,
+        fontWeight: 300,
+        fontFamily: 'var(--font-body)',
         marginBottom: 40,
-        maxWidth: 360,
+        maxWidth: 320,
+        lineHeight: 1.5,
       }}>
-        Tu biblioteca compartida de EPUBs. Comparti libros, descubri lecturas y envia directo a tu Kindle.
+        Tu biblioteca entre amigos
       </p>
 
       <button
@@ -84,7 +88,7 @@ export default function Login() {
           <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
           <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
         </svg>
-        Iniciar sesion con Google
+        Iniciar sesión con Google
       </button>
 
       <p style={{
@@ -92,7 +96,7 @@ export default function Login() {
         fontSize: 12,
         marginTop: 24,
       }}>
-        Necesitas un codigo de invitacion para registrarte.
+        Necesitás un código de invitación para registrarte.
       </p>
     </div>
   );

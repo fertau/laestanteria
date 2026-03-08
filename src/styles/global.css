@@ -17,7 +17,15 @@
 
   --radius: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
   --transition: 0.2s ease;
+
+  /* Extended palette */
+  --accent-glow: rgba(193, 123, 63, 0.15);
+  --accent-soft: rgba(193, 123, 63, 0.08);
+  --gradient-hero: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  --shadow-glow: 0 2px 16px rgba(193, 123, 63, 0.12);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -156,15 +164,30 @@ input:focus, textarea:focus, select:focus {
 }
 
 .section-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title .section-link {
   font-family: var(--font-body);
   font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  font-weight: 400;
+  color: var(--accent);
+  text-decoration: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.section-title .section-link:hover {
+  color: var(--accent-hover);
 }
 
 .spinner {
@@ -289,6 +312,56 @@ input:focus, textarea:focus, select:focus {
   .bottom-nav {
     display: none;
   }
+}
+
+/* ─── Utility classes ─── */
+
+.horizontal-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+
+.horizontal-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.horizontal-scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+.badge-gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent);
+  color: #0f0c08;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+
+.card-glow {
+  box-shadow: var(--shadow-glow);
+  border: 1px solid rgba(193, 123, 63, 0.25);
+}
+
+.card-glow:hover {
+  box-shadow: 0 4px 24px rgba(193, 123, 63, 0.2);
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
 }
 
 /* ─── Focus visible ─── */

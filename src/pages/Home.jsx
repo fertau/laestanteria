@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useActivity } from '../hooks/useActivity';
 import { useFollows } from '../hooks/useFollows';
+import BookCard from '../components/BookCard';
 import BookGrid from '../components/BookGrid';
 import BookModal from '../components/BookModal';
 import Avatar from '../components/Avatar';
-import { useState } from 'react';
 
 export default function Home() {
   const { profile } = useAuth();
@@ -36,7 +36,22 @@ export default function Home() {
       .slice(0, 8);
   }, [books]);
 
+  // Catalog preview (6 random-ish books sorted by title)
+  const catalogPreview = useMemo(() => {
+    return [...books]
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+      .slice(0, 6);
+  }, [books]);
+
+  // Stats
+  const totalBooks = books.length;
+  const totalReaders = useMemo(() => {
+    const ids = new Set(books.map((b) => b.uploadedBy?.uid).filter(Boolean));
+    return Math.max(ids.size, 1);
+  }, [books]);
+
   const isNewUser = !hasFollows && books.length === 0;
+  const firstName = profile?.displayName?.split(' ')[0] || '';
 
   if (booksLoading) {
     return (
@@ -47,68 +62,148 @@ export default function Home() {
   }
 
   return (
-    <div className="page">
-      <h1 className="page-title">Hola, {profile?.displayName?.split(' ')[0]}</h1>
+    <div className="page" style={{ padding: 0 }}>
 
-      {/* Onboarding CTA for new users */}
-      {isNewUser && (
-        <div style={{
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 32,
-          textAlign: 'center',
-          marginBottom: 32,
-        }}>
-          <p style={{ fontSize: 18, marginBottom: 8 }}>Bienvenido/a a La estanteria</p>
-          <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>
-            Empeza siguiendo a alguien del grupo para ver sus libros.
+      {/* ===== HERO SECTION ===== */}
+      <section style={{
+        background: 'var(--gradient-hero)',
+        padding: '28px 20px 24px',
+      }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <p style={{
+            fontSize: 14,
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-body)',
+            fontWeight: 400,
+            marginBottom: 4,
+          }}>
+            Hola, {firstName}
           </p>
-          <Link to="/people" className="btn btn-primary">
-            Ver personas
-          </Link>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: 24,
+            color: 'var(--text)',
+            margin: '0 0 8px',
+            lineHeight: 1.2,
+          }}>
+            Tu estantería compartida
+          </h1>
+          <p style={{
+            fontSize: 13,
+            fontWeight: 300,
+            color: 'var(--text-dim)',
+            fontFamily: 'var(--font-body)',
+          }}>
+            {totalBooks} {totalBooks === 1 ? 'libro' : 'libros'} · {totalReaders} {totalReaders === 1 ? 'lector' : 'lectores'}
+          </p>
         </div>
-      )}
+      </section>
 
-      {/* Recent books */}
-      {recentBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 className="section-title" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
-              Ultimas subidas
-            </h2>
-            <Link to="/catalog" style={{ fontSize: 13 }}>Ver todo</Link>
-          </div>
-          <BookGrid books={recentBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
+      {/* Content wrapper */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px 40px' }}>
 
-      {/* Top rated */}
-      {topRated.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Mejor valorados</h2>
-          <BookGrid books={topRated} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {/* Activity feed */}
-      <section>
-        <h2 className="section-title">Actividad reciente</h2>
-        {actLoading ? (
-          <div style={{ textAlign: 'center', padding: 20 }}>
-            <div className="spinner" style={{ margin: '0 auto' }} />
-          </div>
-        ) : activities.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>
-            No hay actividad reciente. Segui a alguien para ver su actividad.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {activities.map((a) => (
-              <ActivityItem key={a.id} activity={a} />
-            ))}
+        {/* ===== ONBOARDING CTA ===== */}
+        {isNewUser && (
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 32,
+            textAlign: 'center',
+            marginTop: 24,
+            marginBottom: 8,
+            border: '1px solid var(--border)',
+          }}>
+            <p style={{ fontSize: 18, marginBottom: 8, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+              Bienvenido/a a La Estantería
+            </p>
+            <p style={{ color: 'var(--text-muted)', marginBottom: 20, fontSize: 14 }}>
+              Empezá siguiendo a alguien del grupo para ver sus libros.
+            </p>
+            <Link to="/people" className="btn btn-primary">
+              Ver personas
+            </Link>
           </div>
         )}
-      </section>
+
+        {/* ===== RECIÉN LLEGADOS — horizontal scroll ===== */}
+        {recentBooks.length > 0 && (
+          <section style={{ marginTop: 28 }}>
+            <div className="section-title">
+              <span>Recién llegados</span>
+              <Link to="/catalog" className="section-link">Ver todo →</Link>
+            </div>
+            <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
+              {recentBooks.map((book, i) => (
+                <div key={book.id} style={{ flex: '0 0 140px', maxWidth: 140 }}>
+                  <BookCard
+                    book={book}
+                    onClick={setSelectedBook}
+                    animationDelay={i * 50}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ===== MEJOR VALORADOS — horizontal scroll ===== */}
+        {topRated.length > 0 && (
+          <section style={{ marginTop: 28 }}>
+            <div className="section-title">
+              <span>Mejor valorados</span>
+            </div>
+            <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
+              {topRated.map((book, i) => (
+                <div key={book.id} style={{ flex: '0 0 140px', maxWidth: 140 }}>
+                  <BookCard
+                    book={book}
+                    onClick={setSelectedBook}
+                    animationDelay={i * 50}
+                    style={{ boxShadow: 'var(--shadow-glow)' }}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ===== CATÁLOGO GRID PREVIEW ===== */}
+        {catalogPreview.length > 0 && (
+          <section style={{ marginTop: 28 }}>
+            <div className="section-title">
+              <span>Catálogo</span>
+              <Link to="/catalog" className="section-link">Ver todo →</Link>
+            </div>
+            <BookGrid books={catalogPreview} onBookClick={setSelectedBook} />
+          </section>
+        )}
+
+        {/* ===== DIVIDER ===== */}
+        <div className="divider" />
+
+        {/* ===== ACTIVIDAD RECIENTE ===== */}
+        <section>
+          <div className="section-title">
+            <span>Actividad</span>
+          </div>
+          {actLoading ? (
+            <div style={{ textAlign: 'center', padding: 20 }}>
+              <div className="spinner" style={{ margin: '0 auto' }} />
+            </div>
+          ) : activities.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 20, fontSize: 14 }}>
+              No hay actividad reciente. Seguí a alguien para ver su actividad.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {activities.map((a) => (
+                <ActivityItem key={a.id} activity={a} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
@@ -120,10 +215,13 @@ function ActivityItem({ activity }) {
     ? formatTimeAgo(activity.createdAt.seconds * 1000)
     : '';
 
+  let icon = '📖';
   let text = '';
   if (activity.type === 'book_added') {
-    text = `subio "${activity.bookTitle}" de ${activity.bookAuthor}`;
+    icon = '📚';
+    text = `subió "${activity.bookTitle}" de ${activity.bookAuthor}`;
   } else if (activity.type === 'reading_status') {
+    icon = '📖';
     text = `${activity.statusLabel} "${activity.bookTitle}"`;
   } else {
     text = activity.type;
@@ -133,10 +231,12 @@ function ActivityItem({ activity }) {
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
       padding: '10px 14px',
       background: 'var(--surface)',
       borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)',
+      transition: 'background var(--transition)',
     }}>
       <Avatar src={null} name={activity.actorName} size={28} />
       <div style={{ flex: 1, minWidth: 0 }}>
