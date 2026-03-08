@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { collection, query, where, getDocs, updateDoc, doc as docRef } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { fetchByISBN } from '../lib/openLibrary';
@@ -21,8 +23,39 @@ const LANGUAGES = [
 
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
+// Simple Levenshtein distance
+function levenshtein(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b[i - 1] === a[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1,
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  const la = a.toLowerCase().trim();
+  const lb = b.toLowerCase().trim();
+  if (la === lb) return 1;
+  const maxLen = Math.max(la.length, lb.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(la, lb) / maxLen;
+}
+
 export default function UploadModal({ onClose }) {
-  const { uploadBook } = useBooks();
+  const { books, uploadBook } = useBooks();
   const { toast } = useToast();
   const fileRef = useRef(null);
 
@@ -43,26 +76,29 @@ export default function UploadModal({ onClose }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // Duplicate detection state
+  const [dupCheck, setDupCheck] = useState(null); // { type, match, bookGroupId? }
+  const [dupAction, setDupAction] = useState(null); // 'skip' | 'group' | 'proceed'
+
   // Validate EPUB file
   const validateFile = async (f) => {
     setFileError(null);
     setFile(null);
     setFileHash(null);
+    setDupCheck(null);
+    setDupAction(null);
 
-    // Extension check
     if (!f.name.toLowerCase().endsWith('.epub')) {
       setFileError('Solo se admiten archivos EPUB. Los PDF no son compatibles con Kindle.');
       return;
     }
 
-    // Size check
     if (f.size > MAX_SIZE) {
       const sizeMB = (f.size / (1024 * 1024)).toFixed(1);
       setFileError(`El archivo pesa ${sizeMB} MB. El limite es 50 MB.`);
       return;
     }
 
-    // Binary validation: EPUB is a ZIP (PK\x03\x04)
     const header = await f.slice(0, 4).arrayBuffer();
     const bytes = new Uint8Array(header);
     if (bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 0x03 || bytes[3] !== 0x04) {
@@ -82,7 +118,6 @@ export default function UploadModal({ onClose }) {
     // Try to extract title from filename
     const nameWithoutExt = f.name.replace(/\.epub$/i, '');
     if (!title) {
-      // Try "Author - Title" format
       const parts = nameWithoutExt.split(' - ');
       if (parts.length >= 2) {
         setAuthor(parts[0].trim());
@@ -91,6 +126,51 @@ export default function UploadModal({ onClose }) {
         setTitle(nameWithoutExt);
       }
     }
+
+    // Level 1: Check for exact hash match
+    const hashMatch = books.find((b) => b.fileHash === hashHex);
+    if (hashMatch) {
+      setDupCheck({
+        type: 'hash',
+        match: hashMatch,
+        message: `Este archivo ya existe: "${hashMatch.title}" de ${hashMatch.author}`,
+      });
+      return;
+    }
+  };
+
+  // Run additional duplicate checks before submit
+  const checkDuplicates = async () => {
+    // Level 2: ISBN match
+    if (isbn.trim()) {
+      const isbnClean = isbn.replace(/[-\s]/g, '');
+      const isbnMatch = books.find((b) => b.isbn && b.isbn.replace(/[-\s]/g, '') === isbnClean);
+      if (isbnMatch) {
+        return {
+          type: 'isbn',
+          match: isbnMatch,
+          message: `Ya existe un libro con ISBN ${isbn}: "${isbnMatch.title}" (${isbnMatch.language?.toUpperCase()})`,
+        };
+      }
+    }
+
+    // Level 3: Fuzzy title+author match
+    if (title.trim() && author.trim()) {
+      for (const b of books) {
+        const titleSim = similarity(title, b.title);
+        const authorSim = similarity(author, b.author);
+        // Both title and author must be >80% similar
+        if (titleSim > 0.8 && authorSim > 0.8) {
+          return {
+            type: 'fuzzy',
+            match: b,
+            message: `Se encontro un libro similar: "${b.title}" de ${b.author} (${b.language?.toUpperCase()})`,
+          };
+        }
+      }
+    }
+
+    return null;
   };
 
   const handleFileChange = (e) => {
@@ -130,6 +210,28 @@ export default function UploadModal({ onClose }) {
     e.preventDefault();
     if (!file || !title.trim() || !author.trim() || !language) return;
 
+    // If hash duplicate detected, don't allow upload
+    if (dupCheck?.type === 'hash' && dupAction !== 'proceed') {
+      toast('Este archivo ya esta en la estanteria', 'info');
+      return;
+    }
+
+    // Run additional duplicate checks if not already resolved
+    if (!dupCheck && !dupAction) {
+      const dup = await checkDuplicates();
+      if (dup) {
+        setDupCheck(dup);
+        return; // Wait for user to choose action
+      }
+    }
+
+    // Determine bookGroupId
+    let bookGroupId = null;
+    if (dupAction === 'group' && dupCheck?.match) {
+      // Use existing book's group or create a new shared one
+      bookGroupId = dupCheck.match.bookGroupId || crypto.randomUUID();
+    }
+
     setUploading(true);
     setProgress(0);
     try {
@@ -142,8 +244,13 @@ export default function UploadModal({ onClose }) {
         coverUrl,
         fileHash,
         isbn: isbn.trim() || null,
-        bookGroupId: null,
+        bookGroupId,
       }, setProgress);
+
+      // If grouping, update the matched book's bookGroupId too
+      if (dupAction === 'group' && dupCheck?.match && !dupCheck.match.bookGroupId && bookGroupId) {
+        await updateDoc(docRef(db, 'books', dupCheck.match.id), { bookGroupId });
+      }
 
       toast('Libro agregado!', 'success');
       onClose();
@@ -247,6 +354,79 @@ export default function UploadModal({ onClose }) {
               borderRadius: 'var(--radius)',
             }}>
               {fileError}
+            </div>
+          )}
+
+          {/* Duplicate warning */}
+          {dupCheck && !dupAction && (
+            <div style={{
+              marginBottom: 16,
+              padding: '12px 16px',
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--accent)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginBottom: 6 }}>
+                {dupCheck.type === 'hash' ? 'Duplicado exacto' :
+                  dupCheck.type === 'isbn' ? 'Mismo ISBN' : 'Titulo similar'}
+              </div>
+              <div style={{ fontSize: 13, marginBottom: 10 }}>
+                {dupCheck.message}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {dupCheck.type === 'hash' ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12 }}
+                    onClick={onClose}
+                  >
+                    Cancelar upload
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ fontSize: 12 }}
+                      onClick={() => setDupAction('group')}
+                    >
+                      Agrupar como edicion
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: 12 }}
+                      onClick={() => setDupAction('proceed')}
+                    >
+                      Subir como libro nuevo
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12 }}
+                      onClick={onClose}
+                    >
+                      Cancelar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {dupAction && (
+            <div style={{
+              fontSize: 12,
+              color: 'var(--success)',
+              marginBottom: 12,
+              padding: '6px 10px',
+              background: 'rgba(39,174,96,0.1)',
+              borderRadius: 'var(--radius)',
+            }}>
+              {dupAction === 'group'
+                ? `Se agrupara como edicion con "${dupCheck?.match?.title}"`
+                : 'Se subira como libro independiente'}
             </div>
           )}
 
@@ -394,7 +574,7 @@ export default function UploadModal({ onClose }) {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={uploading || !file || !title.trim() || !author.trim()}
+              disabled={uploading || !file || !title.trim() || !author.trim() || (dupCheck?.type === 'hash' && !dupAction)}
             >
               {uploading ? `Subiendo... ${progress}%` : 'Subir libro'}
             </button>
