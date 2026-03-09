@@ -4,6 +4,7 @@ import { useToast } from '../hooks/useToast';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olCovers } from '../lib/openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbCovers } from '../lib/googleBooks';
 import { searchCovers as hcCovers } from '../lib/hardcover';
+import { searchCovers as giCovers } from '../lib/googleImageSearch';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -94,17 +95,19 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResults, olResults, hcResults] = await Promise.allSettled([
+      const [gbResults, olResults, hcResults, giResults] = await Promise.allSettled([
         gbCovers(searchTitle, searchAuthor, searchIsbn, lang),
         olCovers(searchTitle, searchAuthor, searchIsbn, lang),
         hcCovers(searchTitle, searchAuthor, searchIsbn),
+        giCovers(searchTitle, searchAuthor, searchIsbn, lang),
       ]);
 
       const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
       const ol = olResults.status === 'fulfilled' ? olResults.value : [];
       const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
+      const gi = giResults.status === 'fulfilled' ? giResults.value : [];
 
-      const all = [...gb, ...ol, ...hc];
+      const all = [...gb, ...ol, ...hc, ...gi];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -137,18 +140,20 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResults, olResults, hcResults] = await Promise.allSettled([
+      const [gbResults, olResults, hcResults, giResults] = await Promise.allSettled([
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
+        giCovers(title, author, isbn, language),
       ]);
 
       const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
       const ol = olResults.status === 'fulfilled' ? olResults.value : [];
       const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
+      const gi = giResults.status === 'fulfilled' ? giResults.value : [];
 
       // Merge and deduplicate
-      const all = [...gb, ...ol, ...hc];
+      const all = [...gb, ...ol, ...hc, ...gi];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -175,12 +180,13 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setCoverOptions([]);
     try {
       // Search metadata AND covers in parallel for speed
-      const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
+      const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult, giCoverResult] = await Promise.allSettled([
         fetchByISBN(isbn),
         gbISBN(isbn),
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
+        giCovers(title, author, isbn, language),
       ]);
 
       const ol = olResult.status === 'fulfilled' ? olResult.value : null;
@@ -203,7 +209,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
       const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
       const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC];
+      const giC = giCoverResult.status === 'fulfilled' ? giCoverResult.value : [];
+      const all = [...gbC, ...olC, ...hcC, ...giC];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -236,12 +243,13 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
+      const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult, giCoverResult] = await Promise.allSettled([
         gbSearch(title, author, language),
         olSearch(title, author, language),
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
+        giCovers(title, author, isbn, language),
       ]);
 
       const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
@@ -263,7 +271,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
       const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
       const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC];
+      const giC = giCoverResult.status === 'fulfilled' ? giCoverResult.value : [];
+      const all = [...gbC, ...olC, ...hcC, ...giC];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -464,7 +473,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 color: 'var(--text-muted)',
               }}>
                 <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                Buscando en Google Books, Open Library y Hardcover...
+                Buscando en Google Books, Open Library, Hardcover y Google Images...
               </div>
             )}
 
