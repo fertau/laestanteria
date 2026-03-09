@@ -82,21 +82,21 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     if ((!book.coverUrl || book.coverUrl.startsWith('blob:')) && (book.title || book.isbn)) {
       // Small delay to let the modal render first
       const timer = setTimeout(() => {
-        doSearchCovers(book.title || '', book.author || '', book.isbn || '');
+        doSearchCovers(book.title || '', book.author || '', book.isbn || '', book.language || 'es');
       }, 300);
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Search covers from multiple sources ---
-  const doSearchCovers = async (searchTitle, searchAuthor, searchIsbn) => {
+  const doSearchCovers = async (searchTitle, searchAuthor, searchIsbn, lang = 'es') => {
     if (!searchTitle && !searchIsbn) return;
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
       const [gbResults, olResults, hcResults] = await Promise.allSettled([
-        gbCovers(searchTitle, searchAuthor, searchIsbn),
-        olCovers(searchTitle, searchAuthor, searchIsbn),
+        gbCovers(searchTitle, searchAuthor, searchIsbn, lang),
+        olCovers(searchTitle, searchAuthor, searchIsbn, lang),
         hcCovers(searchTitle, searchAuthor, searchIsbn),
       ]);
 
@@ -138,8 +138,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setCoverOptions([]);
     try {
       const [gbResults, olResults, hcResults] = await Promise.allSettled([
-        gbCovers(title, author, isbn),
-        olCovers(title, author, isbn),
+        gbCovers(title, author, isbn, language),
+        olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
       ]);
 
@@ -178,8 +178,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
         fetchByISBN(isbn),
         gbISBN(isbn),
-        gbCovers(title, author, isbn),
-        olCovers(title, author, isbn),
+        gbCovers(title, author, isbn, language),
+        olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
       ]);
 
@@ -237,10 +237,10 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setCoverOptions([]);
     try {
       const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
-        gbSearch(title, author),
-        olSearch(title, author),
-        gbCovers(title, author, isbn),
-        olCovers(title, author, isbn),
+        gbSearch(title, author, language),
+        olSearch(title, author, language),
+        gbCovers(title, author, isbn, language),
+        olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
       ]);
 

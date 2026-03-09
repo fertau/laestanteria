@@ -4,6 +4,13 @@
  */
 
 /**
+ * Map 2-letter language codes to Open Library's 3-letter ISO 639-2 codes.
+ */
+const OL_LANG_MAP = {
+  es: 'spa', en: 'eng', pt: 'por', fr: 'fre', de: 'ger', it: 'ita',
+};
+
+/**
  * Normalize a title for better search results:
  * - Strip subtitle after : or — or –
  * - Remove edition markers and format tags
@@ -60,15 +67,17 @@ export async function fetchByISBN(isbn) {
  * @param {string} author
  * @returns {Promise<object|null>}
  */
-export async function searchByTitleAuthor(title, author) {
+export async function searchByTitleAuthor(title, author, lang = '') {
   if (!title) return null;
 
   const cleanTitle = normalizeTitle(title);
+  const olLang = OL_LANG_MAP[lang] || '';
 
   // Try structured title+author search first
   const params = new URLSearchParams({ limit: '3' });
   params.set('title', cleanTitle);
   if (author) params.set('author', author);
+  if (olLang) params.set('language', olLang);
 
   try {
     let res = await fetch(`https://openlibrary.org/search.json?${params}`);
@@ -77,7 +86,8 @@ export async function searchByTitleAuthor(title, author) {
     // Fallback: generic ?q= search (much more forgiving)
     if (!data.docs?.length) {
       const q = author ? `${cleanTitle} ${author}` : cleanTitle;
-      res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=3`);
+      const fallbackLang = olLang ? `&language=${olLang}` : '';
+      res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=3${fallbackLang}`);
       data = await res.json();
     }
 
@@ -120,10 +130,11 @@ function normalizeSearchDoc(doc) {
  * @param {string} isbn
  * @returns {Promise<Array<object>>}
  */
-export async function searchMultiple(title, author, isbn) {
+export async function searchMultiple(title, author, isbn, lang = '') {
   const candidates = [];
   const seen = new Set();
   const cleanTitle = normalizeTitle(title);
+  const olLang = OL_LANG_MAP[lang] || '';
 
   const addCandidate = (result, searchType) => {
     const key = normalizeForDedup(`${result.title}|${result.author}`);
@@ -133,13 +144,13 @@ export async function searchMultiple(title, author, isbn) {
   };
 
   try {
-    // 1. ISBN lookup (direct API)
+    // 1. ISBN lookup (direct API — no lang filter)
     if (isbn) {
       const result = await fetchByISBN(isbn);
       if (result) addCandidate(result, 'isbn');
     }
 
-    // 2. ISBN search (finds variant editions)
+    // 2. ISBN search (finds variant editions — no lang filter)
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const res = await fetch(
@@ -158,6 +169,7 @@ export async function searchMultiple(title, author, isbn) {
       const params = new URLSearchParams({ limit: '8' });
       params.set('title', cleanTitle);
       if (author) params.set('author', author);
+      if (olLang) params.set('language', olLang);
       const res = await fetch(`https://openlibrary.org/search.json?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -170,7 +182,8 @@ export async function searchMultiple(title, author, isbn) {
     // 4. Fallback: generic ?q= search if few results
     if (candidates.length < 3 && cleanTitle) {
       const q = author ? `${cleanTitle} ${author}` : cleanTitle;
-      const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8`);
+      const langSuffix = olLang ? `&language=${olLang}` : '';
+      const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8${langSuffix}`);
       if (res.ok) {
         const data = await res.json();
         for (const doc of (data.docs || [])) {
@@ -199,10 +212,11 @@ function normalizeForDedup(str) {
  * @param {string} isbn
  * @returns {Promise<Array<{url: string, source: string, label: string}>>}
  */
-export async function searchCovers(title, author, isbn) {
+export async function searchCovers(title, author, isbn, lang = '') {
   const covers = [];
   const seen = new Set();
   const cleanTitle = normalizeTitle(title);
+  const olLang = OL_LANG_MAP[lang] || '';
 
   const addCover = (url, label) => {
     if (!url || seen.has(url)) return;
@@ -211,7 +225,7 @@ export async function searchCovers(title, author, isbn) {
   };
 
   try {
-    // Direct Covers API by ISBN — no search needed, very reliable
+    // Direct Covers API by ISBN — no search needed, very reliable (no lang filter needed)
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const directUrl = `https://covers.openlibrary.org/b/isbn/${clean}-L.jpg`;
@@ -225,7 +239,7 @@ export async function searchCovers(title, author, isbn) {
       } catch { /* ignore HEAD failure */ }
     }
 
-    // Search API by ISBN
+    // Search API by ISBN (no lang filter — ISBN is unique)
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const res = await fetch(
@@ -249,6 +263,7 @@ export async function searchCovers(title, author, isbn) {
       const params = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
       params.set('title', cleanTitle);
       if (author) params.set('author', author);
+      if (olLang) params.set('language', olLang);
       const res = await fetch(`https://openlibrary.org/search.json?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -265,7 +280,8 @@ export async function searchCovers(title, author, isbn) {
       // Fallback: generic ?q= search if title+author found nothing
       if (covers.length === 0) {
         const q = author ? `${cleanTitle} ${author}` : cleanTitle;
-        const res2 = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=10&fields=title,cover_i,author_name`);
+        const langSuffix = olLang ? `&language=${olLang}` : '';
+        const res2 = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=10&fields=title,cover_i,author_name${langSuffix}`);
         if (res2.ok) {
           const data2 = await res2.json();
           for (const doc of (data2.docs || [])) {

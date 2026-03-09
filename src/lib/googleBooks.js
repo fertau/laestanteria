@@ -62,17 +62,18 @@ function normalizeTitle(title) {
  * @param {string} author
  * @returns {Promise<object|null>} Normalized metadata or null
  */
-export async function searchByTitleAuthor(title, author) {
+export async function searchByTitleAuthor(title, author, lang = '') {
   if (!title) return null;
 
   const cleanTitle = normalizeTitle(title);
+  const langParam = lang ? `&langRestrict=${lang}` : '';
 
   // Try structured query first (more precise)
   let q = `intitle:${cleanTitle}`;
   if (author) q += `+inauthor:${author}`;
 
   try {
-    let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=3`);
+    let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=3${langParam}`);
     if (res.ok) {
       const data = await res.json();
       if (data.items?.length) return normalizeVolume(data.items[0]);
@@ -80,7 +81,7 @@ export async function searchByTitleAuthor(title, author) {
 
     // Fallback: plain-text query (much more forgiving for non-exact titles/authors)
     const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
-    res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=3`);
+    res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=3${langParam}`);
     if (!res.ok) return null;
     const data2 = await res.json();
     if (!data2.items?.length) return null;
@@ -175,10 +176,11 @@ function normalizeVolume(item) {
  * @param {string} isbn
  * @returns {Promise<Array<{url: string, source: string, label: string}>>}
  */
-export async function searchCovers(title, author, isbn) {
+export async function searchCovers(title, author, isbn, lang = '') {
   const covers = [];
   const seen = new Set();
   const cleanTitle = normalizeTitle(title);
+  const langParam = lang ? `&langRestrict=${lang}` : '';
 
   const addCover = (url, label) => {
     if (!url || seen.has(url)) return;
@@ -187,7 +189,7 @@ export async function searchCovers(title, author, isbn) {
   };
 
   try {
-    // Search by ISBN first (most precise), try both formats
+    // Search by ISBN first (most precise), try both formats — no lang filter (ISBN is unique)
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const isbns = [clean];
@@ -210,7 +212,7 @@ export async function searchCovers(title, author, isbn) {
     if (cleanTitle) {
       let q = `intitle:${cleanTitle}`;
       if (author) q += `+inauthor:${author}`;
-      let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
+      let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8${langParam}`);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items || [])) {
@@ -222,7 +224,7 @@ export async function searchCovers(title, author, isbn) {
       // Fallback: plain-text query (finds books intitle: misses)
       if (covers.length === 0) {
         const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
-        res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=8`);
+        res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=8${langParam}`);
         if (res.ok) {
           const data = await res.json();
           for (const item of (data.items || [])) {
@@ -269,10 +271,11 @@ function upgradeGoogleCoverUrl(url) {
  * @param {string} isbn
  * @returns {Promise<Array<object>>} Array of normalized metadata objects
  */
-export async function searchMultiple(title, author, isbn) {
+export async function searchMultiple(title, author, isbn, lang = '') {
   const candidates = [];
   const seen = new Set();
   const cleanTitle = normalizeTitle(title);
+  const langParam = lang ? `&langRestrict=${lang}` : '';
 
   const addCandidate = (item, searchType) => {
     const norm = normalizeVolume(item);
@@ -283,7 +286,7 @@ export async function searchMultiple(title, author, isbn) {
   };
 
   try {
-    // 1. ISBN search (highest confidence), try both formats
+    // 1. ISBN search (highest confidence), try both formats — no lang filter
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const isbns = [clean];
@@ -303,7 +306,7 @@ export async function searchMultiple(title, author, isbn) {
     if (cleanTitle) {
       let q = `intitle:${cleanTitle}`;
       if (author) q += `+inauthor:${author}`;
-      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5`);
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5${langParam}`);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items || [])) addCandidate(item, 'title');
@@ -313,7 +316,7 @@ export async function searchMultiple(title, author, isbn) {
     // 3. Fallback plain-text search if few results
     if (candidates.length < 3 && cleanTitle) {
       const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
-      const res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5`);
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5${langParam}`);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items || [])) addCandidate(item, 'title');
