@@ -214,7 +214,25 @@ export async function processQueueItem(item, context, onUpdate) {
         } catch { /* ignore */ }
       }
 
-      // No API enrichment for Calibre — metadata is complete
+      // Calibre metadata is complete for text fields, but covers are local blob: URLs.
+      // Search APIs for a persistent HTTP cover URL to replace the ephemeral blob: URL.
+      if (!meta.coverUrl || meta.coverUrl.startsWith('blob:')) {
+        try {
+          const [gbC, olC] = await Promise.allSettled([
+            gbSearchCovers(meta.title, meta.author, meta.isbn),
+            olSearchCovers(meta.title, meta.author, meta.isbn),
+          ]);
+          const allCovers = [
+            ...(gbC.status === 'fulfilled' ? gbC.value : []),
+            ...(olC.status === 'fulfilled' ? olC.value : []),
+          ];
+          if (allCovers.length > 0) {
+            meta.coverUrl = allCovers[0].url;
+          }
+        } catch {
+          // Silently fail — will save without cover
+        }
+      }
     } else {
       // Plain mode: filename → EPUB OPF → API enrichment
       const filenameMeta = parseFilename(item.filename);

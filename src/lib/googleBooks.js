@@ -16,18 +16,24 @@ const BASE = 'https://www.googleapis.com/books/v1/volumes';
 export async function searchByTitleAuthor(title, author) {
   if (!title) return null;
 
+  // Try structured query first (more precise)
   let q = `intitle:${title}`;
   if (author) q += `+inauthor:${author}`;
 
   try {
-    const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=3&langRestrict=`);
+    let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=3`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.items?.length) return normalizeVolume(data.items[0]);
+    }
+
+    // Fallback: plain-text query (much more forgiving for non-exact titles/authors)
+    const plainQ = author ? `${title} ${author}` : title;
+    res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=3`);
     if (!res.ok) return null;
-    const data = await res.json();
-
-    if (!data.items?.length) return null;
-
-    // Pick the best match (first result is usually best)
-    return normalizeVolume(data.items[0]);
+    const data2 = await res.json();
+    if (!data2.items?.length) return null;
+    return normalizeVolume(data2.items[0]);
   } catch (err) {
     console.warn('Google Books search failed:', err);
     return null;
@@ -71,10 +77,7 @@ function normalizeVolume(item) {
       || info.imageLinks.thumbnail
       || info.imageLinks.smallThumbnail
       || '';
-    // Google Books returns http:// URLs — upgrade to https
-    coverUrl = coverUrl.replace(/^http:/, 'https:');
-    // Remove edge=curl parameter for cleaner images
-    coverUrl = coverUrl.replace(/&edge=curl/g, '');
+    coverUrl = upgradeGoogleCoverUrl(coverUrl);
   }
 
   // Extract ISBN-13 or ISBN-10
@@ -134,16 +137,29 @@ export async function searchCovers(title, author, isbn) {
       }
     }
 
-    // Search by title+author (broader)
+    // Search by title+author — try structured query first, then plain-text fallback
     if (title) {
       let q = `intitle:${title}`;
       if (author) q += `+inauthor:${author}`;
-      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
+      let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items || [])) {
           const cover = extractCover(item);
           if (cover) addCover(cover, item.volumeInfo?.title || '');
+        }
+      }
+
+      // Fallback: plain-text query (finds books intitle: misses)
+      if (covers.length === 0) {
+        const plainQ = author ? `${title} ${author}` : title;
+        res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=8`);
+        if (res.ok) {
+          const data = await res.json();
+          for (const item of (data.items || [])) {
+            const cover = extractCover(item);
+            if (cover) addCover(cover, item.volumeInfo?.title || '');
+          }
         }
       }
     }
@@ -160,10 +176,20 @@ export async function searchCovers(title, author, isbn) {
 function extractCover(item) {
   const links = item.volumeInfo?.imageLinks;
   if (!links) return '';
-  let url = links.extraLarge || links.large || links.medium || links.thumbnail || links.smallThumbnail || '';
-  url = url.replace(/^http:/, 'https:');
-  url = url.replace(/&edge=curl/g, '');
-  return url;
+  const url = links.extraLarge || links.large || links.medium || links.thumbnail || links.smallThumbnail || '';
+  return upgradeGoogleCoverUrl(url);
+}
+
+/**
+ * Upgrade Google Books cover URL: https, remove curl, request full resolution (zoom=0).
+ */
+function upgradeGoogleCoverUrl(url) {
+  if (!url) return '';
+  let u = url.replace(/^http:/, 'https:');
+  u = u.replace(/&edge=curl/g, '');
+  // zoom=1 returns ~128px thumbnail; zoom=0 returns full-resolution cover
+  u = u.replace(/zoom=\d/, 'zoom=0');
+  return u;
 }
 
 /**

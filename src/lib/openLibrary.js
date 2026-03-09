@@ -19,11 +19,15 @@ export async function fetchByISBN(isbn) {
 
     if (!book) return null;
 
+    // Prefer API cover, fall back to direct Covers API URL
+    const coverUrl = book.cover?.large || book.cover?.medium
+      || `https://covers.openlibrary.org/b/isbn/${cleanISBN}-L.jpg`;
+
     return {
       title: book.title || '',
       author: book.authors?.map((a) => a.name).join(', ') || '',
       description: book.notes || book.excerpts?.[0]?.text || '',
-      coverUrl: book.cover?.large || book.cover?.medium || '',
+      coverUrl,
       genre: book.subjects?.slice(0, 2).map((s) => s.name).join(', ') || '',
       publishDate: book.publish_date || '',
       isbn: cleanISBN,
@@ -100,7 +104,21 @@ export async function searchCovers(title, author, isbn) {
   };
 
   try {
-    // Search by ISBN
+    // Direct Covers API by ISBN — no search needed, very reliable
+    if (isbn) {
+      const clean = isbn.replace(/[-\s]/g, '');
+      const directUrl = `https://covers.openlibrary.org/b/isbn/${clean}-L.jpg`;
+      try {
+        const head = await fetch(directUrl, { method: 'HEAD' });
+        // OL returns 200 with a 1x1 placeholder when no cover exists, check content-length
+        const cl = parseInt(head.headers.get('content-length') || '0', 10);
+        if (head.ok && cl > 1000) {
+          addCover(directUrl, 'Open Library ISBN');
+        }
+      } catch { /* ignore HEAD failure */ }
+    }
+
+    // Search API by ISBN
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
       const res = await fetch(
@@ -133,6 +151,24 @@ export async function searchCovers(title, author, isbn) {
               `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
               doc.title || ''
             );
+          }
+        }
+      }
+
+      // Fallback: if title+author found nothing, try title only
+      if (covers.length === 0 && author) {
+        const params2 = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
+        params2.set('title', title);
+        const res2 = await fetch(`https://openlibrary.org/search.json?${params2}`);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          for (const doc of (data2.docs || [])) {
+            if (doc.cover_i) {
+              addCover(
+                `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+                doc.title || ''
+              );
+            }
           }
         }
       }
