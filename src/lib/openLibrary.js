@@ -87,6 +87,88 @@ export async function searchByTitleAuthor(title, author) {
 }
 
 /**
+ * Normalize an Open Library search doc to our standard metadata format.
+ * Shared between searchByTitleAuthor, searchMultiple, etc.
+ */
+function normalizeSearchDoc(doc) {
+  let coverUrl = '';
+  if (doc.cover_i) {
+    coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
+  }
+  const isbn = doc.isbn?.find((i) => i.length === 13) || doc.isbn?.[0] || '';
+  return {
+    title: doc.title || '',
+    author: doc.author_name?.join(', ') || '',
+    description: doc.first_sentence?.join(' ') || '',
+    coverUrl,
+    genre: doc.subject?.slice(0, 2).join(', ') || '',
+    publishDate: doc.first_publish_year?.toString() || '',
+    isbn,
+    source: 'openlibrary',
+  };
+}
+
+/**
+ * Search Open Library and return MULTIPLE normalized candidates.
+ * Used by batch update for Plex-style candidate selection.
+ * @param {string} title
+ * @param {string} author
+ * @param {string} isbn
+ * @returns {Promise<Array<object>>}
+ */
+export async function searchMultiple(title, author, isbn) {
+  const candidates = [];
+  const seen = new Set();
+
+  const addCandidate = (result, searchType) => {
+    const key = `${result.title}|${result.author}`.toLowerCase().trim();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ ...result, searchType });
+  };
+
+  try {
+    // 1. ISBN lookup (direct API)
+    if (isbn) {
+      const result = await fetchByISBN(isbn);
+      if (result) addCandidate(result, 'isbn');
+    }
+
+    // 2. ISBN search (finds variant editions)
+    if (isbn) {
+      const clean = isbn.replace(/[-\s]/g, '');
+      const res = await fetch(
+        `https://openlibrary.org/search.json?isbn=${clean}&limit=5`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const doc of (data.docs || [])) {
+          addCandidate(normalizeSearchDoc(doc), 'isbn');
+        }
+      }
+    }
+
+    // 3. Title+author search
+    if (title) {
+      const params = new URLSearchParams({ limit: '8' });
+      params.set('title', title);
+      if (author) params.set('author', author);
+      const res = await fetch(`https://openlibrary.org/search.json?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const doc of (data.docs || [])) {
+          addCandidate(normalizeSearchDoc(doc), 'title');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Open Library searchMultiple failed:', err);
+  }
+
+  return candidates.slice(0, 8);
+}
+
+/**
  * Search Open Library and return multiple cover URLs.
  * @param {string} title
  * @param {string} author

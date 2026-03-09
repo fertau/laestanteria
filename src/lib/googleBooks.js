@@ -193,6 +193,64 @@ function upgradeGoogleCoverUrl(url) {
 }
 
 /**
+ * Search Google Books and return MULTIPLE normalized candidates.
+ * Used by batch update for Plex-style candidate selection.
+ * @param {string} title
+ * @param {string} author
+ * @param {string} isbn
+ * @returns {Promise<Array<object>>} Array of normalized metadata objects
+ */
+export async function searchMultiple(title, author, isbn) {
+  const candidates = [];
+  const seen = new Set();
+
+  const addCandidate = (item, searchType) => {
+    const norm = normalizeVolume(item);
+    const key = `${norm.title}|${norm.author}`.toLowerCase().trim();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ ...norm, searchType });
+  };
+
+  try {
+    // 1. ISBN search (highest confidence)
+    if (isbn) {
+      const clean = isbn.replace(/[-\s]/g, '');
+      const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=3`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) addCandidate(item, 'isbn');
+      }
+    }
+
+    // 2. Structured title+author search
+    if (title) {
+      let q = `intitle:${title}`;
+      if (author) q += `+inauthor:${author}`;
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) addCandidate(item, 'title');
+      }
+    }
+
+    // 3. Fallback plain-text search if few results
+    if (candidates.length < 3 && title) {
+      const plainQ = author ? `${title} ${author}` : title;
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) addCandidate(item, 'title');
+      }
+    }
+  } catch (err) {
+    console.warn('Google Books searchMultiple failed:', err);
+  }
+
+  return candidates.slice(0, 8);
+}
+
+/**
  * Strip HTML from Google Books descriptions
  */
 function cleanDescription(text) {

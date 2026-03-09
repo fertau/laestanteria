@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
-import { buildBatchItem, processBatchItem, applyBatchItem } from '../lib/batchQueue';
+import { buildBatchItem, processBatchItem, applyBatchItem, reSearchBatchItem, buildDiffFromCandidate } from '../lib/batchQueue';
 
 const FILTERS = [
   { value: 'all', label: 'Todos' },
@@ -40,6 +40,13 @@ export default function BatchUpdate() {
 
   // Review phase state
   const [expandedIds, setExpandedIds] = useState(new Set());
+
+  // Re-search state
+  const [reSearchId, setReSearchId] = useState(null);
+  const [reSearchTitle, setReSearchTitle] = useState('');
+  const [reSearchAuthor, setReSearchAuthor] = useState('');
+  const [reSearchIsbn, setReSearchIsbn] = useState('');
+  const [reSearching, setReSearching] = useState(false);
 
   // Stats for done phase
   const [stats, setStats] = useState({ updated: 0, unchanged: 0, errors: 0 });
@@ -216,6 +223,48 @@ export default function BatchUpdate() {
         };
       }),
     );
+  };
+
+  // --- Candidate selection ---
+  const selectCandidate = useCallback((bookId, candidateIndex) => {
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (item.id !== bookId) return item;
+        const candidate = item.candidates?.[candidateIndex];
+        if (!candidate) return item;
+        const newDiff = buildDiffFromCandidate(item.book, candidate, item.fillEmptyOnly !== false);
+        return { ...item, selectedCandidateIndex: candidateIndex, diff: newDiff };
+      }),
+    );
+  }, []);
+
+  const toggleFillMode = useCallback((bookId) => {
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (item.id !== bookId) return item;
+        const newFillEmpty = !item.fillEmptyOnly;
+        let newDiff = item.diff;
+        if (item.selectedCandidateIndex >= 0 && item.candidates?.[item.selectedCandidateIndex]) {
+          newDiff = buildDiffFromCandidate(item.book, item.candidates[item.selectedCandidateIndex], newFillEmpty);
+        }
+        return { ...item, fillEmptyOnly: newFillEmpty, diff: newDiff };
+      }),
+    );
+  }, []);
+
+  const handleReSearch = async (bookId) => {
+    setReSearching(true);
+    const customSearch = {
+      title: reSearchTitle.trim(),
+      author: reSearchAuthor.trim(),
+      isbn: reSearchIsbn.trim(),
+    };
+    const item = queue.find((q) => q.id === bookId);
+    if (item) {
+      await reSearchBatchItem(item, customSearch, (update) => updateQueueItem(bookId, update));
+    }
+    setReSearching(false);
+    setReSearchId(null);
   };
 
   const toggleExpanded = (id) => {
@@ -477,7 +526,7 @@ export default function BatchUpdate() {
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
                   {item.status === 'searching' && 'Buscando...'}
                   {item.status === 'covers' && 'Portadas...'}
-                  {item.status === 'ready' && `${Object.keys(item.diff || {}).length} cambios`}
+                  {item.status === 'ready' && `${item.candidates?.length || 0} candidatos, ${Object.keys(item.diff || {}).length} cambios`}
                   {item.status === 'unchanged' && 'Sin cambios'}
                   {item.status === 'error' && (item.error || 'Error')}
                 </span>
@@ -520,6 +569,8 @@ export default function BatchUpdate() {
             {queue.map((item) => {
               const diffEntries = Object.entries(item.diff || {});
               const hasDiff = diffEntries.length > 0;
+              const hasCandidates = (item.candidates?.length || 0) > 0;
+              const isExpandable = hasDiff || hasCandidates;
               const isExpanded = expandedIds.has(item.id);
               const acceptedCount = diffEntries.filter(([, d]) => d.accepted).length;
 
@@ -530,12 +581,12 @@ export default function BatchUpdate() {
                     border: '1px solid var(--border)',
                     borderRadius: 'var(--radius)',
                     overflow: 'hidden',
-                    opacity: hasDiff ? 1 : 0.5,
+                    opacity: isExpandable ? 1 : 0.5,
                   }}
                 >
                   {/* Book header row */}
                   <button
-                    onClick={() => hasDiff && toggleExpanded(item.id)}
+                    onClick={() => isExpandable && toggleExpanded(item.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -544,12 +595,12 @@ export default function BatchUpdate() {
                       width: '100%',
                       background: isExpanded ? 'var(--surface)' : 'transparent',
                       border: 'none',
-                      cursor: hasDiff ? 'pointer' : 'default',
+                      cursor: isExpandable ? 'pointer' : 'default',
                       color: 'var(--text)',
                       textAlign: 'left',
                     }}
                   >
-                    {hasDiff && (
+                    {isExpandable && (
                       <span style={{ fontSize: 12, color: 'var(--text-dim)', flexShrink: 0 }}>
                         {isExpanded ? '▼' : '▶'}
                       </span>
@@ -572,127 +623,294 @@ export default function BatchUpdate() {
                     <span style={{ fontSize: 11, color: hasDiff ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }}>
                       {hasDiff
                         ? `${acceptedCount}/${diffEntries.length} campos`
-                        : item.status === 'error'
-                          ? 'Error'
-                          : 'Sin cambios'}
+                        : hasCandidates
+                          ? `${item.candidates.length} candidatos`
+                          : item.status === 'error'
+                            ? 'Error'
+                            : 'Sin resultados'}
                     </span>
                   </button>
 
-                  {/* Expanded diff */}
-                  {isExpanded && hasDiff && (
-                    <div style={{ padding: '0 12px 12px', background: 'var(--surface)' }}>
-                      {diffEntries.map(([field, change]) => (
-                        <div key={field} style={{ padding: '6px 0', borderTop: '1px solid var(--border)' }}>
-                          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={change.accepted}
-                              onChange={() => toggleDiffField(item.id, field)}
-                              style={{ marginTop: 2 }}
-                            />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 2 }}>
-                                {FIELD_LABELS[field] || field}
-                              </div>
-                              {field === 'coverUrl' ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  {/* Old cover */}
-                                  <div style={{
-                                    width: 40,
-                                    height: 60,
-                                    borderRadius: 3,
-                                    background: 'var(--bg)',
-                                    overflow: 'hidden',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}>
-                                    {change.old && !change.old.startsWith('blob:') ? (
-                                      <img
-                                        src={change.old}
-                                        alt=""
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                      />
-                                    ) : (
-                                      <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>sin</span>
-                                    )}
-                                  </div>
-                                  <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>→</span>
-                                  {/* New cover */}
-                                  <div style={{
-                                    width: 40,
-                                    height: 60,
-                                    borderRadius: 3,
-                                    border: '2px solid var(--accent)',
-                                    overflow: 'hidden',
-                                  }}>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div style={{ background: 'var(--surface)' }}>
+                      {/* Candidate cards — horizontal scroll */}
+                      {hasCandidates && (
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                            {item.candidates.length} candidatos encontrados:
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            gap: 8,
+                            overflowX: 'auto',
+                            paddingBottom: 6,
+                          }}>
+                            {item.candidates.map((cand, ci) => (
+                              <button
+                                key={ci}
+                                type="button"
+                                onClick={() => selectCandidate(item.id, ci)}
+                                style={{
+                                  flexShrink: 0,
+                                  width: 120,
+                                  padding: 8,
+                                  border: item.selectedCandidateIndex === ci
+                                    ? '2px solid var(--accent)'
+                                    : '1px solid var(--border)',
+                                  borderRadius: 'var(--radius)',
+                                  background: item.selectedCandidateIndex === ci
+                                    ? 'rgba(193,123,63,0.08)'
+                                    : 'var(--bg)',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                }}
+                              >
+                                <div style={{
+                                  width: '100%',
+                                  height: 80,
+                                  borderRadius: 4,
+                                  overflow: 'hidden',
+                                  background: 'var(--surface)',
+                                  marginBottom: 6,
+                                }}>
+                                  {cand.coverUrl ? (
                                     <img
-                                      src={change.new}
+                                      src={cand.coverUrl}
                                       alt=""
                                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                       onError={(e) => { e.target.style.display = 'none'; }}
+                                      loading="lazy"
                                     />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 12 }}>
-                                  {change.old ? (
-                                    <span>
-                                      <span style={{ color: 'var(--text-dim)', textDecoration: 'line-through' }}>
-                                        {change.old}
-                                      </span>
-                                      {' → '}
-                                    </span>
                                   ) : (
-                                    <span style={{ color: 'var(--text-dim)' }}>(vacio) → </span>
+                                    <div style={{
+                                      width: '100%', height: '100%',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      fontSize: 9, color: 'var(--text-dim)',
+                                    }}>sin portada</div>
                                   )}
-                                  <span style={{ color: 'var(--success)' }}>{change.new}</span>
+                                </div>
+                                <div style={{
+                                  fontSize: 11, fontWeight: 600,
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  color: 'var(--text)',
+                                }}>
+                                  {cand.title || '(sin titulo)'}
+                                </div>
+                                <div style={{
+                                  fontSize: 10, color: 'var(--text-muted)',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                  {cand.author || '(sin autor)'}
+                                </div>
+                                <span style={{
+                                  display: 'inline-block', fontSize: 9, fontWeight: 700,
+                                  color: cand.source === 'google' ? '#4285F4' : '#e44f26',
+                                  background: cand.source === 'google' ? 'rgba(66,133,244,0.1)' : 'rgba(228,79,38,0.1)',
+                                  padding: '1px 5px', borderRadius: 3, marginTop: 4,
+                                }}>
+                                  {cand.source === 'google' ? 'Google' : 'OpenLib'}
+                                </span>
+                              </button>
+                            ))}
+
+                            {/* "Re-search" action card */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReSearchId(item.id);
+                                setReSearchTitle(item.book.title || '');
+                                setReSearchAuthor(item.book.author || '');
+                                setReSearchIsbn(item.book.isbn || '');
+                              }}
+                              style={{
+                                flexShrink: 0, width: 120, padding: 8,
+                                border: '1px dashed var(--border)',
+                                borderRadius: 'var(--radius)',
+                                background: 'transparent', cursor: 'pointer',
+                                display: 'flex', flexDirection: 'column',
+                                alignItems: 'center', justifyContent: 'center',
+                                gap: 4, color: 'var(--text-muted)',
+                              }}
+                            >
+                              <span style={{ fontSize: 20 }}>&#x1f50d;</span>
+                              <span style={{ fontSize: 11 }}>Otra busqueda</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No candidates — prominent re-search button */}
+                      {!hasCandidates && item.status !== 'error' && (
+                        <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+                          <div style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8 }}>
+                            No se encontraron candidatos
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ fontSize: 12 }}
+                            onClick={() => {
+                              setReSearchId(item.id);
+                              setReSearchTitle(item.book.title || '');
+                              setReSearchAuthor(item.book.author || '');
+                              setReSearchIsbn(item.book.isbn || '');
+                            }}
+                          >
+                            Buscar manualmente
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Re-search form */}
+                      {reSearchId === item.id && (
+                        <div style={{
+                          padding: '10px 12px', background: 'var(--bg)',
+                          borderTop: '1px solid var(--border)',
+                          display: 'flex', flexDirection: 'column', gap: 6,
+                        }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Busqueda personalizada:
+                          </div>
+                          <input
+                            value={reSearchTitle}
+                            onChange={(e) => setReSearchTitle(e.target.value)}
+                            placeholder="Titulo"
+                            style={{ fontSize: 12, padding: '6px 10px' }}
+                          />
+                          <input
+                            value={reSearchAuthor}
+                            onChange={(e) => setReSearchAuthor(e.target.value)}
+                            placeholder="Autor"
+                            style={{ fontSize: 12, padding: '6px 10px' }}
+                          />
+                          <input
+                            value={reSearchIsbn}
+                            onChange={(e) => setReSearchIsbn(e.target.value)}
+                            placeholder="ISBN"
+                            style={{ fontSize: 12, padding: '6px 10px' }}
+                          />
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              style={{ fontSize: 12, flex: 1 }}
+                              disabled={reSearching || (!reSearchTitle.trim() && !reSearchIsbn.trim())}
+                              onClick={() => handleReSearch(item.id)}
+                            >
+                              {reSearching ? 'Buscando...' : 'Buscar'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ fontSize: 12 }}
+                              onClick={() => setReSearchId(null)}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Fill mode toggle */}
+                      {item.selectedCandidateIndex >= 0 && (
+                        <div style={{
+                          padding: '6px 12px',
+                          borderTop: '1px solid var(--border)',
+                        }}>
+                          <label style={{
+                            fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={!item.fillEmptyOnly}
+                              onChange={() => toggleFillMode(item.id)}
+                            />
+                            Actualizar todos los campos (no solo vacios)
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Field diffs */}
+                      {hasDiff && (
+                        <div style={{ padding: '0 12px 12px' }}>
+                          {diffEntries.map(([field, change]) => (
+                            <div key={field} style={{ padding: '6px 0', borderTop: '1px solid var(--border)' }}>
+                              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={change.accepted}
+                                  onChange={() => toggleDiffField(item.id, field)}
+                                  style={{ marginTop: 2 }}
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 2 }}>
+                                    {FIELD_LABELS[field] || field}
+                                  </div>
+                                  {field === 'coverUrl' ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <div style={{
+                                        width: 40, height: 60, borderRadius: 3,
+                                        background: 'var(--bg)', overflow: 'hidden',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      }}>
+                                        {change.old && !change.old.startsWith('blob:') ? (
+                                          <img src={change.old} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                        ) : (
+                                          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>sin</span>
+                                        )}
+                                      </div>
+                                      <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>→</span>
+                                      <div style={{ width: 40, height: 60, borderRadius: 3, border: '2px solid var(--accent)', overflow: 'hidden' }}>
+                                        <img src={change.new} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: 12 }}>
+                                      {change.old ? (
+                                        <span>
+                                          <span style={{ color: 'var(--text-dim)', textDecoration: 'line-through' }}>{change.old}</span>
+                                          {' → '}
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: 'var(--text-dim)' }}>(vacio) → </span>
+                                      )}
+                                      <span style={{ color: 'var(--success)' }}>{change.new}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </label>
+
+                              {/* Cover options gallery */}
+                              {field === 'coverUrl' && item.coverOptions?.length > 1 && (
+                                <div style={{ marginTop: 8, marginLeft: 28 }}>
+                                  <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
+                                    Otras portadas disponibles:
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                                    {item.coverOptions.map((opt, oi) => (
+                                      <button
+                                        key={oi}
+                                        type="button"
+                                        onClick={() => selectCover(item.id, opt.url)}
+                                        style={{
+                                          flexShrink: 0, width: 40, height: 60, padding: 0,
+                                          border: change.new === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
+                                          borderRadius: 3, overflow: 'hidden', cursor: 'pointer', background: 'var(--bg)',
+                                        }}
+                                        title={`${opt.label} (${opt.source})`}
+                                      >
+                                        <img src={opt.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          </label>
-
-                          {/* Cover options gallery */}
-                          {field === 'coverUrl' && item.coverOptions?.length > 1 && (
-                            <div style={{ marginTop: 8, marginLeft: 28 }}>
-                              <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
-                                Otras portadas disponibles:
-                              </div>
-                              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                                {item.coverOptions.map((opt, i) => (
-                                  <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => selectCover(item.id, opt.url)}
-                                    style={{
-                                      flexShrink: 0,
-                                      width: 40,
-                                      height: 60,
-                                      padding: 0,
-                                      border: change.new === opt.url
-                                        ? '2px solid var(--accent)'
-                                        : '2px solid transparent',
-                                      borderRadius: 3,
-                                      overflow: 'hidden',
-                                      cursor: 'pointer',
-                                      background: 'var(--bg)',
-                                    }}
-                                    title={`${opt.label} (${opt.source})`}
-                                  >
-                                    <img
-                                      src={opt.url}
-                                      alt=""
-                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                      onError={(e) => { e.target.parentElement.style.display = 'none'; }}
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
