@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useBooks } from '../hooks/useBooks';
+import { useAuth } from '../hooks/useAuth';
 import BookGrid from '../components/BookGrid';
 import BookModal from '../components/BookModal';
 import UploadModal from '../components/UploadModal';
@@ -30,6 +32,7 @@ const SORT_OPTIONS = [
 
 export default function Catalog() {
   const { books, loading, hasFollows } = useBooks();
+  const { user } = useAuth();
 
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState('');
@@ -120,6 +123,15 @@ export default function Catalog() {
           >
             Importar
           </button>
+          {books.some(b => b.uploadedBy?.uid === user?.uid) && (
+            <Link
+              to="/catalog/batch"
+              className="btn btn-secondary"
+              style={{ fontSize: 13, textDecoration: 'none' }}
+            >
+              Actualizar metadata
+            </Link>
+          )}
         </div>
       </div>
 
