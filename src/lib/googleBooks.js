@@ -104,6 +104,69 @@ function normalizeVolume(item) {
 }
 
 /**
+ * Search Google Books and return multiple cover URLs.
+ * @param {string} title
+ * @param {string} author
+ * @param {string} isbn
+ * @returns {Promise<Array<{url: string, source: string, label: string}>>}
+ */
+export async function searchCovers(title, author, isbn) {
+  const covers = [];
+  const seen = new Set();
+
+  const addCover = (url, label) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    covers.push({ url, source: 'google', label });
+  };
+
+  try {
+    // Search by ISBN first (most precise)
+    if (isbn) {
+      const clean = isbn.replace(/[-\s]/g, '');
+      const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=3`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) {
+          const cover = extractCover(item);
+          if (cover) addCover(cover, item.volumeInfo?.title || 'ISBN match');
+        }
+      }
+    }
+
+    // Search by title+author (broader)
+    if (title) {
+      let q = `intitle:${title}`;
+      if (author) q += `+inauthor:${author}`;
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) {
+          const cover = extractCover(item);
+          if (cover) addCover(cover, item.volumeInfo?.title || '');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Google Books cover search failed:', err);
+  }
+
+  return covers;
+}
+
+/**
+ * Extract the best cover URL from a Google Books volume item.
+ */
+function extractCover(item) {
+  const links = item.volumeInfo?.imageLinks;
+  if (!links) return '';
+  let url = links.extraLarge || links.large || links.medium || links.thumbnail || links.smallThumbnail || '';
+  url = url.replace(/^http:/, 'https:');
+  url = url.replace(/&edge=curl/g, '');
+  return url;
+}
+
+/**
  * Strip HTML from Google Books descriptions
  */
 function cleanDescription(text) {

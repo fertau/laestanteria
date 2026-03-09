@@ -81,3 +81,65 @@ export async function searchByTitleAuthor(title, author) {
     return null;
   }
 }
+
+/**
+ * Search Open Library and return multiple cover URLs.
+ * @param {string} title
+ * @param {string} author
+ * @param {string} isbn
+ * @returns {Promise<Array<{url: string, source: string, label: string}>>}
+ */
+export async function searchCovers(title, author, isbn) {
+  const covers = [];
+  const seen = new Set();
+
+  const addCover = (url, label) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    covers.push({ url, source: 'openlibrary', label });
+  };
+
+  try {
+    // Search by ISBN
+    if (isbn) {
+      const clean = isbn.replace(/[-\s]/g, '');
+      const res = await fetch(
+        `https://openlibrary.org/search.json?isbn=${clean}&limit=5&fields=title,cover_i,author_name`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const doc of (data.docs || [])) {
+          if (doc.cover_i) {
+            addCover(
+              `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+              doc.title || 'ISBN match'
+            );
+          }
+        }
+      }
+    }
+
+    // Search by title+author
+    if (title) {
+      const params = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
+      params.set('title', title);
+      if (author) params.set('author', author);
+      const res = await fetch(`https://openlibrary.org/search.json?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const doc of (data.docs || [])) {
+          if (doc.cover_i) {
+            addCover(
+              `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+              doc.title || ''
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Open Library cover search failed:', err);
+  }
+
+  return covers;
+}
