@@ -92,7 +92,7 @@ export default function Profile() {
 
   const shareWhatsApp = (code) => {
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-    const text = `Te invito a La Cueva! Usa este codigo para registrarte: ${code}\n${appUrl}`;
+    const text = `Te invito a La estanteria! Usa este codigo para registrarte: ${code}\n${appUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 

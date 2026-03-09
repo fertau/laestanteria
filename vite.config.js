@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'La Cueva',
-        short_name: 'La Cueva',
+        name: 'La estanteria',
+        short_name: 'Estanteria',
         start_url: '/',
         display: 'standalone',
         background_color: '#0f0c08',

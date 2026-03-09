@@ -315,7 +315,7 @@ export default function Catalog() {
           padding: '40px 20px',
           color: 'var(--text-muted)',
         }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>Cueva vacía</div>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>Estanteria vacia</div>
           <p style={{ marginBottom: 16 }}>
             Subi tu primer libro o segui a alguien para ver su biblioteca.
           </p>

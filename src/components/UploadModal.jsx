@@ -491,7 +491,7 @@ export default function UploadModal({ onClose }) {
 
     // If hash duplicate detected, don't allow upload
     if (dupCheck?.type === 'hash' && dupAction !== 'proceed') {
-      toast('Este archivo ya esta en La Cueva', 'info');
+      toast('Este archivo ya esta en la estanteria', 'info');
       return;
     }
 

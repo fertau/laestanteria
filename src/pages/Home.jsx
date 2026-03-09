@@ -87,7 +87,7 @@ export default function Home() {
             margin: '0 0 8px',
             lineHeight: 1.2,
           }}>
-            Tu cueva compartida
+            Tu estantería compartida
           </h1>
           <p style={{
             fontSize: 13,
@@ -115,7 +115,7 @@ export default function Home() {
             border: '1px solid var(--border)',
           }}>
             <p style={{ fontSize: 18, marginBottom: 8, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-              Bienvenido/a a La Cueva
+              Bienvenido/a a La Estantería
             </p>
             <p style={{ color: 'var(--text-muted)', marginBottom: 20, fontSize: 14 }}>
               Empezá siguiendo a alguien del grupo para ver sus libros.
