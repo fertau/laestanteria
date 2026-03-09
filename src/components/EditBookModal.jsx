@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olCovers } from '../lib/openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbCovers } from '../lib/googleBooks';
 import { searchCovers as hcCovers } from '../lib/hardcover';
-import { uploadCoverImage } from '../lib/coverStorage';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -54,7 +53,7 @@ function mapGenre(genreStr) {
  * EditBookModal — Edit all metadata fields of an existing book.
  * Opens on top of BookModal (z-index 1001).
  * Supports ISBN and title+author search from Google Books / Open Library / Hardcover.
- * Includes visual cover picker with multiple options from APIs + file upload to Firebase Storage.
+ * Includes visual cover picker with multiple options from APIs + manual URL input.
  */
 export default function EditBookModal({ book, onClose, onSaved }) {
   const { updateBook } = useBooks();
@@ -77,11 +76,6 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   const [searchingCovers, setSearchingCovers] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
 
-  // Cover file upload state
-  const [coverFile, setCoverFile] = useState(null);
-  const [coverPreview, setCoverPreview] = useState('');
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const fileInputRef = useRef(null);
 
   // Auto-search covers when opening a book with no cover (or blob: cover)
   useEffect(() => {
@@ -93,30 +87,6 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cleanup blob preview URL on unmount or change
-  useEffect(() => {
-    return () => {
-      if (coverPreview) URL.revokeObjectURL(coverPreview);
-    };
-  }, [coverPreview]);
-
-  // --- Handle cover file selection ---
-  const handleCoverFileChange = (file) => {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast('El archivo no es una imagen', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast('La imagen excede 5MB', 'error');
-      return;
-    }
-    if (coverPreview) URL.revokeObjectURL(coverPreview);
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
-    setCoverUrl(''); // clear URL so preview shows the file
-  };
 
   // --- Search covers from multiple sources ---
   const doSearchCovers = async (searchTitle, searchAuthor, searchIsbn) => {
@@ -326,24 +296,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
     setSaving(true);
     try {
-      let finalCoverUrl = coverUrl.trim();
-
-      // If there's a cover file, upload to Firebase Storage first
-      if (coverFile) {
-        setUploadingCover(true);
-        try {
-          finalCoverUrl = await uploadCoverImage(book.id, coverFile);
-        } catch (err) {
-          toast('Error al subir portada: ' + err.message, 'error');
-          // Don't blank existing cover — keep what was there
-          finalCoverUrl = book.coverUrl || '';
-        } finally {
-          setUploadingCover(false);
-        }
-      }
-
       // Never save blob: URLs
-      const safeCover = finalCoverUrl.startsWith('blob:') ? '' : finalCoverUrl;
+      const safeCover = coverUrl.trim().startsWith('blob:') ? '' : coverUrl.trim();
 
       await updateBook(book.id, {
         title: title.trim(),
@@ -442,18 +396,12 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 overflow: 'hidden',
                 flexShrink: 0,
                 background: 'var(--surface)',
-                border: (coverUrl || coverPreview) ? '2px solid var(--accent)' : '2px dashed var(--border)',
+                border: coverUrl ? '2px solid var(--accent)' : '2px dashed var(--border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                {coverPreview ? (
-                  <img
-                    src={coverPreview}
-                    alt="Preview archivo"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : coverUrl && !coverUrl.startsWith('blob:') ? (
+                {coverUrl && !coverUrl.startsWith('blob:') ? (
                   <img
                     src={coverUrl}
                     alt="Portada actual"
@@ -476,15 +424,10 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 >
                   {searchingCovers ? 'Buscando...' : 'Buscar portada'}
                 </button>
-                {(coverUrl || coverFile) && (
+                {coverUrl && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setCoverUrl('');
-                      setCoverFile(null);
-                      if (coverPreview) URL.revokeObjectURL(coverPreview);
-                      setCoverPreview('');
-                    }}
+                    onClick={() => setCoverUrl('')}
                     className="btn btn-ghost"
                     style={{ fontSize: 11, color: 'var(--danger)' }}
                   >
@@ -502,61 +445,10 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 {showUrlInput && (
                   <input
                     value={coverUrl}
-                    onChange={(e) => {
-                      setCoverUrl(e.target.value);
-                      // Clear file if user types a URL
-                      if (coverFile) {
-                        setCoverFile(null);
-                        if (coverPreview) URL.revokeObjectURL(coverPreview);
-                        setCoverPreview('');
-                      }
-                    }}
+                    onChange={(e) => setCoverUrl(e.target.value)}
                     placeholder="https://..."
                     style={{ fontSize: 12 }}
                   />
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) handleCoverFileChange(e.target.files[0]);
-                    e.target.value = ''; // reset so same file can be re-selected
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11 }}
-                >
-                  Subir imagen
-                </button>
-                {coverFile && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontSize: 11,
-                    color: 'var(--text-muted)',
-                  }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
-                      {coverFile.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCoverFile(null);
-                        if (coverPreview) URL.revokeObjectURL(coverPreview);
-                        setCoverPreview('');
-                      }}
-                      className="btn btn-ghost"
-                      style={{ fontSize: 10, padding: '2px 6px', color: 'var(--danger)' }}
-                    >
-                      ×
-                    </button>
-                  </div>
                 )}
               </div>
             </div>
@@ -593,12 +485,6 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                       type="button"
                       onClick={() => {
                         setCoverUrl(opt.url);
-                        // Clear file upload if user picks an API cover
-                        if (coverFile) {
-                          setCoverFile(null);
-                          if (coverPreview) URL.revokeObjectURL(coverPreview);
-                          setCoverPreview('');
-                        }
                         toast('Portada seleccionada', 'success');
                       }}
                       style={{
@@ -749,7 +635,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
               className="btn btn-primary"
               disabled={saving || !title.trim() || !author.trim() || fetchingMeta}
             >
-              {uploadingCover ? 'Subiendo portada...' : saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
         </form>
