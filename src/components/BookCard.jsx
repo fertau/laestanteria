@@ -2,28 +2,52 @@ import Avatar from './Avatar';
 
 const langLabels = { es: 'ES', en: 'EN', pt: 'PT', fr: 'FR', de: 'DE', it: 'IT' };
 
-export default function BookCard({ book, onClick, style = {}, animationDelay = 0 }) {
+export default function BookCard({
+  book,
+  onClick,
+  style = {},
+  animationDelay = 0,
+  selectionMode = false,
+  isSelected = false,
+  isSelectable = false,
+  onToggleSelect,
+}) {
   const rating =
     book.ratingCount > 0 ? (book.ratingSum / book.ratingCount).toFixed(1) : null;
 
+  const handleClick = () => {
+    if (selectionMode) {
+      if (isSelectable) onToggleSelect?.(book.id);
+      return;
+    }
+    onClick?.(book);
+  };
+
   return (
     <div
-      onClick={() => onClick?.(book)}
+      onClick={handleClick}
       style={{
-        cursor: 'pointer',
+        cursor: selectionMode && !isSelectable ? 'default' : 'pointer',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
         background: 'var(--surface)',
-        transition: 'transform var(--transition), box-shadow var(--transition)',
+        transition: 'transform var(--transition), box-shadow var(--transition), border-color var(--transition), opacity var(--transition)',
         animation: `fadeInUp 0.3s ease ${animationDelay}ms both`,
         position: 'relative',
+        border: selectionMode && isSelected
+          ? '2px solid var(--accent)'
+          : '2px solid transparent',
+        opacity: selectionMode && !isSelectable ? 0.4 : 1,
+        pointerEvents: selectionMode && !isSelectable ? 'none' : 'auto',
         ...style,
       }}
       onMouseOver={(e) => {
+        if (selectionMode) return;
         e.currentTarget.style.transform = 'translateY(-4px)';
         e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
       }}
       onMouseOut={(e) => {
+        if (selectionMode) return;
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.boxShadow = 'none';
       }}
@@ -72,7 +96,7 @@ export default function BookCard({ book, onClick, style = {}, animationDelay = 0
           </div>
         )}
 
-        {/* Language badge */}
+        {/* Language badge — top-left */}
         {book.language && (
           <span style={{
             position: 'absolute',
@@ -89,7 +113,41 @@ export default function BookCard({ book, onClick, style = {}, animationDelay = 0
           </span>
         )}
 
-        {/* Uploader avatar */}
+        {/* Selection checkbox — top-right */}
+        {selectionMode && isSelectable && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(book.id);
+            }}
+            style={{
+              position: 'absolute',
+              top: 6,
+              right: 6,
+              width: 22,
+              height: 22,
+              borderRadius: 4,
+              background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.6)',
+              border: isSelected
+                ? '2px solid var(--accent)'
+                : '2px solid rgba(232,220,200,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+              zIndex: 2,
+              cursor: 'pointer',
+            }}
+          >
+            {isSelected && (
+              <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>
+                ✓
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Uploader avatar — bottom-right */}
         <div style={{ position: 'absolute', bottom: 6, right: 6 }}>
           <Avatar
             src={null}

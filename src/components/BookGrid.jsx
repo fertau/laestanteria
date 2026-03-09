@@ -1,6 +1,13 @@
 import BookCard from './BookCard';
 
-export default function BookGrid({ books, onBookClick }) {
+export default function BookGrid({
+  books,
+  onBookClick,
+  selectionMode = false,
+  selectedIds = new Set(),
+  selectableIds = new Set(),
+  onToggleSelect,
+}) {
   if (books.length === 0) return null;
 
   return (
@@ -15,6 +22,10 @@ export default function BookGrid({ books, onBookClick }) {
           book={book}
           onClick={onBookClick}
           animationDelay={i * 40}
+          selectionMode={selectionMode}
+          isSelected={selectedIds.has(book.id)}
+          isSelectable={selectableIds.has(book.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>

@@ -14,6 +14,7 @@ import { parseEpub } from './epubParser';
 import { parseCalibreOpf, getCalibreCoverUrl } from './calibreParser';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from './openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from './googleBooks';
+import { searchByTitleAuthor as hcSearch, searchCovers as hcSearchCovers } from './hardcover';
 import { uploadEpubToDrive, shareWithServiceAccount } from './googleDrive';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -45,6 +46,27 @@ function mapGenre(genreStr) {
     if (regex.test(genreStr)) return mapped;
   }
   return '';
+}
+
+/**
+ * Assess confidence in extracted metadata.
+ * Returns 'high', 'medium', or 'low'.
+ * - high: ISBN present (≥10 chars) → continue without pause
+ * - medium: title (>3 chars) + real author, or title ≥10 chars → continue
+ * - low: insufficient metadata → pause for manual identification
+ */
+function assessConfidence(meta) {
+  const isbn = (meta.isbn || '').replace(/[-\s]/g, '');
+  if (isbn.length >= 10) return 'high';
+
+  const title = (meta.title || '').trim();
+  const author = (meta.author || '').trim();
+  const hasRealAuthor = author && author !== 'Desconocido' && author.length > 1;
+
+  if (title.length > 3 && hasRealAuthor) return 'medium';
+  if (title.length >= 10) return 'medium';
+
+  return 'low';
 }
 
 /**
@@ -129,6 +151,7 @@ export async function enrichMetadataStandalone(baseMeta) {
   if (baseMeta.title) {
     searches.push(gbSearch(baseMeta.title, baseMeta.author));
     searches.push(olSearch(baseMeta.title, baseMeta.author));
+    searches.push(hcSearch(baseMeta.title, baseMeta.author));
   }
 
   if (searches.length === 0) return baseMeta;
@@ -159,9 +182,10 @@ export async function enrichMetadataStandalone(baseMeta) {
  * @param {ImportQueueItem} item
  * @param {Object} context - { books, accessToken, folderId, uid, profile }
  * @param {(update: Partial<ImportQueueItem>) => void} onUpdate
+ * @param {((extractedMeta: Object) => Promise<{title,author,isbn}|null>)|null} onNeedsIdentification
  * @returns {Promise<'done'|'skipped'|'error'>}
  */
-export async function processQueueItem(item, context, onUpdate) {
+export async function processQueueItem(item, context, onUpdate, onNeedsIdentification = null) {
   const { books, accessToken, folderId, uid, profile } = context;
 
   try {
@@ -214,17 +238,38 @@ export async function processQueueItem(item, context, onUpdate) {
         } catch { /* ignore */ }
       }
 
+      // Confidence check: pause for manual identification if metadata is insufficient
+      if (assessConfidence(meta) === 'low' && onNeedsIdentification) {
+        onUpdate({ status: 'needs_identification', metadata: { ...meta } });
+        const corrected = await onNeedsIdentification({
+          title: meta.title,
+          author: meta.author,
+          isbn: meta.isbn,
+          filename: item.filename,
+        });
+        if (!corrected) {
+          onUpdate({ status: 'skipped', skipReason: 'Omitido manualmente' });
+          return 'skipped';
+        }
+        if (corrected.title) meta.title = corrected.title;
+        if (corrected.author) meta.author = corrected.author;
+        if (corrected.isbn) meta.isbn = corrected.isbn;
+        onUpdate({ status: 'parsing', metadata: { ...meta } });
+      }
+
       // Calibre metadata is complete for text fields, but covers are local blob: URLs.
       // Search APIs for a persistent HTTP cover URL to replace the ephemeral blob: URL.
       if (!meta.coverUrl || meta.coverUrl.startsWith('blob:')) {
         try {
-          const [gbC, olC] = await Promise.allSettled([
+          const [gbC, olC, hcC] = await Promise.allSettled([
             gbSearchCovers(meta.title, meta.author, meta.isbn),
             olSearchCovers(meta.title, meta.author, meta.isbn),
+            hcSearchCovers(meta.title, meta.author, meta.isbn),
           ]);
           const allCovers = [
             ...(gbC.status === 'fulfilled' ? gbC.value : []),
             ...(olC.status === 'fulfilled' ? olC.value : []),
+            ...(hcC.status === 'fulfilled' ? hcC.value : []),
           ];
           if (allCovers.length > 0) {
             meta.coverUrl = allCovers[0].url;
@@ -259,6 +304,25 @@ export async function processQueueItem(item, context, onUpdate) {
         console.warn('EPUB parse failed:', err);
       }
 
+      // Confidence check: pause for manual identification if metadata is insufficient
+      if (assessConfidence(meta) === 'low' && onNeedsIdentification) {
+        onUpdate({ status: 'needs_identification', metadata: { ...meta } });
+        const corrected = await onNeedsIdentification({
+          title: meta.title,
+          author: meta.author,
+          isbn: meta.isbn,
+          filename: item.filename,
+        });
+        if (!corrected) {
+          onUpdate({ status: 'skipped', skipReason: 'Omitido manualmente' });
+          return 'skipped';
+        }
+        if (corrected.title) meta.title = corrected.title;
+        if (corrected.author) meta.author = corrected.author;
+        if (corrected.isbn) meta.isbn = corrected.isbn;
+        onUpdate({ status: 'parsing', metadata: { ...meta } });
+      }
+
       // API enrichment (only for plain mode)
       if (meta.title || meta.isbn) {
         try {
@@ -286,13 +350,15 @@ export async function processQueueItem(item, context, onUpdate) {
       // Fallback: if cover is still a blob: URL or empty, try broader cover search
       if (!meta.coverUrl || meta.coverUrl.startsWith('blob:')) {
         try {
-          const [gbC, olC] = await Promise.allSettled([
+          const [gbC, olC, hcC] = await Promise.allSettled([
             gbSearchCovers(meta.title, meta.author, meta.isbn),
             olSearchCovers(meta.title, meta.author, meta.isbn),
+            hcSearchCovers(meta.title, meta.author, meta.isbn),
           ]);
           const allCovers = [
             ...(gbC.status === 'fulfilled' ? gbC.value : []),
             ...(olC.status === 'fulfilled' ? olC.value : []),
+            ...(hcC.status === 'fulfilled' ? hcC.value : []),
           ];
           if (allCovers.length > 0) {
             meta.coverUrl = allCovers[0].url;

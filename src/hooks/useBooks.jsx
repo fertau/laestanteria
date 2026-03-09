@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
@@ -128,12 +129,28 @@ export function useBooks() {
     []
   );
 
+  // Bulk delete books (atomic via writeBatch, up to 500 per batch)
+  const deleteBooks = useCallback(
+    async (bookIds) => {
+      if (!bookIds || bookIds.length === 0) return;
+      const batchSize = 500;
+      for (let i = 0; i < bookIds.length; i += batchSize) {
+        const chunk = bookIds.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        chunk.forEach((id) => batch.delete(doc(db, 'books', id)));
+        await batch.commit();
+      }
+    },
+    []
+  );
+
   return {
     books: allBooks,
     loading,
     uploadBook,
     updateBook,
     deleteBook,
+    deleteBooks,
     hasFollows: libraryFollowingUids.length > 0,
   };
 }

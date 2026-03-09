@@ -32,6 +32,12 @@ export default function ImportModal({ onClose }) {
   const cancelledRef = useRef(false);
   const coverUrlsRef = useRef([]); // track Object URLs for cleanup
 
+  // Manual identification state
+  const [identificationPromise, setIdentificationPromise] = useState(null);
+  const [idTitle, setIdTitle] = useState('');
+  const [idAuthor, setIdAuthor] = useState('');
+  const [idIsbn, setIdIsbn] = useState('');
+
   // Cleanup Object URLs on unmount
   useEffect(() => {
     return () => {
@@ -144,14 +150,26 @@ export default function ImportModal({ onClose }) {
       if (cancelledRef.current) break;
       setCurrentIndex(i);
 
-      await processQueueItem(queue[i], context, (update) => {
-        updateItem(i, update);
+      await processQueueItem(
+        queue[i],
+        context,
+        (update) => {
+          updateItem(i, update);
 
-        // Track Object URLs from Calibre covers for cleanup
-        if (update.metadata?.coverUrl && update.metadata.coverUrl.startsWith('blob:')) {
-          coverUrlsRef.current.push(update.metadata.coverUrl);
-        }
-      });
+          // Track Object URLs from Calibre covers for cleanup
+          if (update.metadata?.coverUrl && update.metadata.coverUrl.startsWith('blob:')) {
+            coverUrlsRef.current.push(update.metadata.coverUrl);
+          }
+        },
+        // onNeedsIdentification: pause for user to manually identify the book
+        (extractedMeta) =>
+          new Promise((resolve) => {
+            setIdTitle(extractedMeta.title || '');
+            setIdAuthor(extractedMeta.author || '');
+            setIdIsbn(extractedMeta.isbn || '');
+            setIdentificationPromise({ resolve, extractedMeta, itemIndex: i });
+          })
+      );
     }
 
     setPhase('done');
@@ -159,6 +177,23 @@ export default function ImportModal({ onClose }) {
 
   const handleCancel = () => {
     cancelledRef.current = true;
+  };
+
+  // --- Manual identification handlers ---
+  const handleIdentificationSubmit = () => {
+    if (!identificationPromise) return;
+    identificationPromise.resolve({
+      title: idTitle.trim(),
+      author: idAuthor.trim(),
+      isbn: idIsbn.trim(),
+    });
+    setIdentificationPromise(null);
+  };
+
+  const handleIdentificationSkip = () => {
+    if (!identificationPromise) return;
+    identificationPromise.resolve(null);
+    setIdentificationPromise(null);
   };
 
   // --- Stats ---
@@ -407,6 +442,72 @@ export default function ImportModal({ onClose }) {
               ))}
             </div>
 
+            {/* Manual identification form */}
+            {identificationPromise && (
+              <div style={{
+                padding: 16,
+                marginBottom: 16,
+                background: 'var(--surface)',
+                border: '1px solid var(--accent)',
+                borderRadius: 'var(--radius)',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                  Necesita identificación
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  El archivo "{identificationPromise.extractedMeta?.filename || ''}" no tiene suficiente metadata.
+                  Ingresá el título y autor para buscar información.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    value={idTitle}
+                    onChange={(e) => setIdTitle(e.target.value)}
+                    placeholder="Título del libro"
+                    style={{ fontSize: 13, padding: '8px 10px' }}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && idTitle.trim()) handleIdentificationSubmit();
+                    }}
+                  />
+                  <input
+                    value={idAuthor}
+                    onChange={(e) => setIdAuthor(e.target.value)}
+                    placeholder="Autor"
+                    style={{ fontSize: 13, padding: '8px 10px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && idTitle.trim()) handleIdentificationSubmit();
+                    }}
+                  />
+                  <input
+                    value={idIsbn}
+                    onChange={(e) => setIdIsbn(e.target.value)}
+                    placeholder="ISBN (opcional)"
+                    style={{ fontSize: 13, padding: '8px 10px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && idTitle.trim()) handleIdentificationSubmit();
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 13 }}
+                      onClick={handleIdentificationSkip}
+                    >
+                      Omitir
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: 13 }}
+                      disabled={!idTitle.trim()}
+                      onClick={handleIdentificationSubmit}
+                    >
+                      Identificar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn-secondary"
@@ -557,6 +658,12 @@ function QueueStatusRow({ item, isCurrent }) {
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
             <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
             Analizando...
+          </span>
+        );
+      case 'needs_identification':
+        return (
+          <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+            ⚠ Necesita identificación
           </span>
         );
       case 'uploading':

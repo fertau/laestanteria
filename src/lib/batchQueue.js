@@ -8,6 +8,7 @@
 
 import { searchMultiple as gbSearchMultiple, searchCovers as gbSearchCovers } from './googleBooks';
 import { searchMultiple as olSearchMultiple, searchCovers as olSearchCovers } from './openLibrary';
+import { searchMultiple as hcSearchMultiple, searchCovers as hcSearchCovers } from './hardcover';
 
 const GENRE_MAP = [
   [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
@@ -26,6 +27,14 @@ const GENRE_MAP = [
   [/poet|poes/i, 'Poesia'],
   [/child|infant|juvenil|kid/i, 'Infantil'],
 ];
+
+/**
+ * Normalize a string for dedup: lowercase, strip punctuation, collapse spaces.
+ * Avoids false duplicates like "El Hobbit" vs "El hobbit" or "J.R.R. Tolkien" vs "JRR Tolkien".
+ */
+function normalizeForDedup(str) {
+  return str.toLowerCase().replace(/[^\w\s|]/g, '').replace(/\s+/g, ' ').trim();
+}
 
 function mapGenre(genreStr) {
   if (!genreStr) return '';
@@ -50,26 +59,29 @@ function completenessScore(candidate) {
  * @returns {Promise<Array<object>>}
  */
 async function searchCandidates(title, author, isbn) {
-  const [gbResults, olResults] = await Promise.allSettled([
+  const [gbResults, olResults, hcResults] = await Promise.allSettled([
     gbSearchMultiple(title, author, isbn),
     olSearchMultiple(title, author, isbn),
+    hcSearchMultiple(title, author, isbn),
   ]);
 
   const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
   const ol = olResults.status === 'fulfilled' ? olResults.value : [];
+  const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
 
-  // Interleave results (BookLore pattern: show diversity from both sources)
+  // 3-way interleave (show diversity from all sources)
   const interleaved = [];
-  const maxLen = Math.max(gb.length, ol.length);
+  const maxLen = Math.max(gb.length, ol.length, hc.length);
   for (let i = 0; i < maxLen; i++) {
     if (i < gb.length) interleaved.push(gb[i]);
     if (i < ol.length) interleaved.push(ol[i]);
+    if (i < hc.length) interleaved.push(hc[i]);
   }
 
-  // Deduplicate by normalized title+author
+  // Deduplicate by normalized title+author (strips punctuation, case, extra spaces)
   const seen = new Set();
   const unique = interleaved.filter((c) => {
-    const key = `${(c.title || '').toLowerCase().trim()}|${(c.author || '').toLowerCase().trim()}`;
+    const key = normalizeForDedup(`${c.title || ''}|${c.author || ''}`);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -182,13 +194,15 @@ export async function processBatchItem(item, onUpdate) {
     onUpdate({ status: 'covers' });
     let coverOptions = [];
     try {
-      const [gbC, olC] = await Promise.allSettled([
+      const [gbC, olC, hcC] = await Promise.allSettled([
         gbSearchCovers(searchTitle, searchAuthor, searchIsbn),
         olSearchCovers(searchTitle, searchAuthor, searchIsbn),
+        hcSearchCovers(searchTitle, searchAuthor, searchIsbn),
       ]);
       const allCovers = [
         ...(gbC.status === 'fulfilled' ? gbC.value : []),
         ...(olC.status === 'fulfilled' ? olC.value : []),
+        ...(hcC.status === 'fulfilled' ? hcC.value : []),
       ];
       const seen = new Set();
       coverOptions = allCovers.filter((c) => {

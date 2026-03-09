@@ -7,6 +7,55 @@
 
 const BASE = 'https://www.googleapis.com/books/v1/volumes';
 
+// ── ISBN conversion helpers ──
+
+/**
+ * Convert ISBN-13 (978...) to ISBN-10.
+ * Returns null if the ISBN-13 doesn't start with 978.
+ */
+function isbn13to10(isbn13) {
+  const clean = isbn13.replace(/[-\s]/g, '');
+  if (clean.length !== 13 || !clean.startsWith('978')) return null;
+  const core = clean.slice(3, 12);
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(core[i], 10) * (10 - i);
+  const check = (11 - (sum % 11)) % 11;
+  return core + (check === 10 ? 'X' : String(check));
+}
+
+/**
+ * Convert ISBN-10 to ISBN-13 (978 prefix).
+ */
+function isbn10to13(isbn10) {
+  const clean = isbn10.replace(/[-\s]/g, '');
+  if (clean.length !== 10) return null;
+  const core = '978' + clean.slice(0, 9);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += parseInt(core[i], 10) * (i % 2 === 0 ? 1 : 3);
+  const check = (10 - (sum % 10)) % 10;
+  return core + String(check);
+}
+
+// ── Title normalization ──
+
+/**
+ * Normalize a title for better search results:
+ * - Strip subtitle after : or —
+ * - Remove edition markers like [2nd Ed.], (Edición revisada)
+ * - Remove format tags like (Kindle), (ebook), (PDF)
+ */
+function normalizeTitle(title) {
+  if (!title) return '';
+  let t = title;
+  // Strip subtitle after : or — or –
+  t = t.split(/\s*[:\u2014\u2013]\s*/)[0];
+  // Remove bracketed/parenthesized edition markers
+  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad|spanish|english|kindle|ebook|pdf|epub)[\])]/gi, '');
+  // Remove trailing parenthesized format info
+  t = t.replace(/\s*\((?:kindle|ebook|pdf|epub|paperback|hardcover|tapa dura|tapa blanda)\)\s*$/gi, '');
+  return t.trim();
+}
+
 /**
  * Search Google Books by title and author.
  * @param {string} title
@@ -16,8 +65,10 @@ const BASE = 'https://www.googleapis.com/books/v1/volumes';
 export async function searchByTitleAuthor(title, author) {
   if (!title) return null;
 
+  const cleanTitle = normalizeTitle(title);
+
   // Try structured query first (more precise)
-  let q = `intitle:${title}`;
+  let q = `intitle:${cleanTitle}`;
   if (author) q += `+inauthor:${author}`;
 
   try {
@@ -28,7 +79,7 @@ export async function searchByTitleAuthor(title, author) {
     }
 
     // Fallback: plain-text query (much more forgiving for non-exact titles/authors)
-    const plainQ = author ? `${title} ${author}` : title;
+    const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
     res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=3`);
     if (!res.ok) return null;
     const data2 = await res.json();
@@ -51,11 +102,22 @@ export async function searchByISBN(isbn) {
 
   try {
     const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=1`);
-    if (!res.ok) return null;
-    const data = await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.items?.length) return normalizeVolume(data.items[0]);
+    }
 
-    if (!data.items?.length) return null;
-    return normalizeVolume(data.items[0]);
+    // Try converted ISBN (13→10 or 10→13) if original didn't find anything
+    const converted = clean.length === 13 ? isbn13to10(clean) : isbn10to13(clean);
+    if (converted) {
+      const res2 = await fetch(`${BASE}?q=isbn:${converted}&maxResults=1`);
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2.items?.length) return normalizeVolume(data2.items[0]);
+      }
+    }
+
+    return null;
   } catch (err) {
     console.warn('Google Books ISBN search failed:', err);
     return null;
@@ -116,6 +178,7 @@ function normalizeVolume(item) {
 export async function searchCovers(title, author, isbn) {
   const covers = [];
   const seen = new Set();
+  const cleanTitle = normalizeTitle(title);
 
   const addCover = (url, label) => {
     if (!url || seen.has(url)) return;
@@ -124,22 +187,28 @@ export async function searchCovers(title, author, isbn) {
   };
 
   try {
-    // Search by ISBN first (most precise)
+    // Search by ISBN first (most precise), try both formats
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
-      const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=3`);
-      if (res.ok) {
-        const data = await res.json();
-        for (const item of (data.items || [])) {
-          const cover = extractCover(item);
-          if (cover) addCover(cover, item.volumeInfo?.title || 'ISBN match');
+      const isbns = [clean];
+      const converted = clean.length === 13 ? isbn13to10(clean) : isbn10to13(clean);
+      if (converted) isbns.push(converted);
+
+      for (const isbnVal of isbns) {
+        const res = await fetch(`${BASE}?q=isbn:${isbnVal}&maxResults=3`);
+        if (res.ok) {
+          const data = await res.json();
+          for (const item of (data.items || [])) {
+            const cover = extractCover(item);
+            if (cover) addCover(cover, item.volumeInfo?.title || 'ISBN match');
+          }
         }
       }
     }
 
     // Search by title+author — try structured query first, then plain-text fallback
-    if (title) {
-      let q = `intitle:${title}`;
+    if (cleanTitle) {
+      let q = `intitle:${cleanTitle}`;
       if (author) q += `+inauthor:${author}`;
       let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
       if (res.ok) {
@@ -152,7 +221,7 @@ export async function searchCovers(title, author, isbn) {
 
       // Fallback: plain-text query (finds books intitle: misses)
       if (covers.length === 0) {
-        const plainQ = author ? `${title} ${author}` : title;
+        const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
         res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=8`);
         if (res.ok) {
           const data = await res.json();
@@ -203,29 +272,36 @@ function upgradeGoogleCoverUrl(url) {
 export async function searchMultiple(title, author, isbn) {
   const candidates = [];
   const seen = new Set();
+  const cleanTitle = normalizeTitle(title);
 
   const addCandidate = (item, searchType) => {
     const norm = normalizeVolume(item);
-    const key = `${norm.title}|${norm.author}`.toLowerCase().trim();
+    const key = normalizeForDedup(`${norm.title}|${norm.author}`);
     if (seen.has(key)) return;
     seen.add(key);
     candidates.push({ ...norm, searchType });
   };
 
   try {
-    // 1. ISBN search (highest confidence)
+    // 1. ISBN search (highest confidence), try both formats
     if (isbn) {
       const clean = isbn.replace(/[-\s]/g, '');
-      const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=3`);
-      if (res.ok) {
-        const data = await res.json();
-        for (const item of (data.items || [])) addCandidate(item, 'isbn');
+      const isbns = [clean];
+      const converted = clean.length === 13 ? isbn13to10(clean) : isbn10to13(clean);
+      if (converted) isbns.push(converted);
+
+      for (const isbnVal of isbns) {
+        const res = await fetch(`${BASE}?q=isbn:${isbnVal}&maxResults=3`);
+        if (res.ok) {
+          const data = await res.json();
+          for (const item of (data.items || [])) addCandidate(item, 'isbn');
+        }
       }
     }
 
     // 2. Structured title+author search
-    if (title) {
-      let q = `intitle:${title}`;
+    if (cleanTitle) {
+      let q = `intitle:${cleanTitle}`;
       if (author) q += `+inauthor:${author}`;
       const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5`);
       if (res.ok) {
@@ -235,8 +311,8 @@ export async function searchMultiple(title, author, isbn) {
     }
 
     // 3. Fallback plain-text search if few results
-    if (candidates.length < 3 && title) {
-      const plainQ = author ? `${title} ${author}` : title;
+    if (candidates.length < 3 && cleanTitle) {
+      const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
       const res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5`);
       if (res.ok) {
         const data = await res.json();
@@ -248,6 +324,13 @@ export async function searchMultiple(title, author, isbn) {
   }
 
   return candidates.slice(0, 8);
+}
+
+/**
+ * Normalize a string for dedup: lowercase, strip punctuation, collapse spaces.
+ */
+function normalizeForDedup(str) {
+  return str.toLowerCase().replace(/[^\w\s|]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /**

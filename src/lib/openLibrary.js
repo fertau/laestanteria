@@ -4,6 +4,20 @@
  */
 
 /**
+ * Normalize a title for better search results:
+ * - Strip subtitle after : or — or –
+ * - Remove edition markers and format tags
+ */
+function normalizeTitle(title) {
+  if (!title) return '';
+  let t = title;
+  t = t.split(/\s*[:\u2014\u2013]\s*/)[0];
+  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad|spanish|english|kindle|ebook|pdf|epub)[\])]/gi, '');
+  t = t.replace(/\s*\((?:kindle|ebook|pdf|epub|paperback|hardcover|tapa dura|tapa blanda)\)\s*$/gi, '');
+  return t.trim();
+}
+
+/**
  * Fetch book metadata from Open Library by ISBN.
  * @param {string} isbn
  * @returns {Promise<object|null>}
@@ -49,37 +63,27 @@ export async function fetchByISBN(isbn) {
 export async function searchByTitleAuthor(title, author) {
   if (!title) return null;
 
+  const cleanTitle = normalizeTitle(title);
+
+  // Try structured title+author search first
   const params = new URLSearchParams({ limit: '3' });
-  params.set('title', title);
+  params.set('title', cleanTitle);
   if (author) params.set('author', author);
 
   try {
-    const res = await fetch(`https://openlibrary.org/search.json?${params}`);
-    const data = await res.json();
+    let res = await fetch(`https://openlibrary.org/search.json?${params}`);
+    let data = await res.json();
+
+    // Fallback: generic ?q= search (much more forgiving)
+    if (!data.docs?.length) {
+      const q = author ? `${cleanTitle} ${author}` : cleanTitle;
+      res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=3`);
+      data = await res.json();
+    }
 
     if (!data.docs?.length) return null;
 
-    const doc = data.docs[0];
-
-    // Build cover URL from cover_i (cover ID)
-    let coverUrl = '';
-    if (doc.cover_i) {
-      coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-    }
-
-    // Get ISBN
-    const isbn = doc.isbn?.find((i) => i.length === 13) || doc.isbn?.[0] || '';
-
-    return {
-      title: doc.title || '',
-      author: doc.author_name?.join(', ') || '',
-      description: doc.first_sentence?.join(' ') || '',
-      coverUrl,
-      genre: doc.subject?.slice(0, 2).join(', ') || '',
-      publishDate: doc.first_publish_year?.toString() || '',
-      isbn,
-      source: 'openlibrary',
-    };
+    return normalizeSearchDoc(data.docs[0]);
   } catch (err) {
     console.warn('Open Library search failed:', err);
     return null;
@@ -119,9 +123,10 @@ function normalizeSearchDoc(doc) {
 export async function searchMultiple(title, author, isbn) {
   const candidates = [];
   const seen = new Set();
+  const cleanTitle = normalizeTitle(title);
 
   const addCandidate = (result, searchType) => {
-    const key = `${result.title}|${result.author}`.toLowerCase().trim();
+    const key = normalizeForDedup(`${result.title}|${result.author}`);
     if (seen.has(key)) return;
     seen.add(key);
     candidates.push({ ...result, searchType });
@@ -148,12 +153,24 @@ export async function searchMultiple(title, author, isbn) {
       }
     }
 
-    // 3. Title+author search
-    if (title) {
+    // 3. Structured title+author search
+    if (cleanTitle) {
       const params = new URLSearchParams({ limit: '8' });
-      params.set('title', title);
+      params.set('title', cleanTitle);
       if (author) params.set('author', author);
       const res = await fetch(`https://openlibrary.org/search.json?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const doc of (data.docs || [])) {
+          addCandidate(normalizeSearchDoc(doc), 'title');
+        }
+      }
+    }
+
+    // 4. Fallback: generic ?q= search if few results
+    if (candidates.length < 3 && cleanTitle) {
+      const q = author ? `${cleanTitle} ${author}` : cleanTitle;
+      const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8`);
       if (res.ok) {
         const data = await res.json();
         for (const doc of (data.docs || [])) {
@@ -169,6 +186,13 @@ export async function searchMultiple(title, author, isbn) {
 }
 
 /**
+ * Normalize a string for dedup: lowercase, strip punctuation, collapse spaces.
+ */
+function normalizeForDedup(str) {
+  return str.toLowerCase().replace(/[^\w\s|]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Search Open Library and return multiple cover URLs.
  * @param {string} title
  * @param {string} author
@@ -178,6 +202,7 @@ export async function searchMultiple(title, author, isbn) {
 export async function searchCovers(title, author, isbn) {
   const covers = [];
   const seen = new Set();
+  const cleanTitle = normalizeTitle(title);
 
   const addCover = (url, label) => {
     if (!url || seen.has(url)) return;
@@ -220,9 +245,9 @@ export async function searchCovers(title, author, isbn) {
     }
 
     // Search by title+author
-    if (title) {
+    if (cleanTitle) {
       const params = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
-      params.set('title', title);
+      params.set('title', cleanTitle);
       if (author) params.set('author', author);
       const res = await fetch(`https://openlibrary.org/search.json?${params}`);
       if (res.ok) {
@@ -237,11 +262,10 @@ export async function searchCovers(title, author, isbn) {
         }
       }
 
-      // Fallback: if title+author found nothing, try title only
-      if (covers.length === 0 && author) {
-        const params2 = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
-        params2.set('title', title);
-        const res2 = await fetch(`https://openlibrary.org/search.json?${params2}`);
+      // Fallback: generic ?q= search if title+author found nothing
+      if (covers.length === 0) {
+        const q = author ? `${cleanTitle} ${author}` : cleanTitle;
+        const res2 = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=10&fields=title,cover_i,author_name`);
         if (res2.ok) {
           const data2 = await res2.json();
           for (const doc of (data2.docs || [])) {

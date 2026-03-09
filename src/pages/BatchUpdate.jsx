@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
@@ -27,6 +27,7 @@ export default function BatchUpdate() {
   const { user } = useAuth();
   const { books, updateBook } = useBooks();
   const { toast } = useToast();
+  const location = useLocation();
 
   // Phase management
   const [phase, setPhase] = useState('select');
@@ -36,7 +37,10 @@ export default function BatchUpdate() {
   // Select phase state
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectedIds, setSelectedIds] = useState(() => {
+    const pre = location.state?.preSelectedIds;
+    return pre ? new Set(pre) : new Set();
+  });
 
   // Review phase state
   const [expandedIds, setExpandedIds] = useState(new Set());
@@ -705,11 +709,17 @@ export default function BatchUpdate() {
                                 </div>
                                 <span style={{
                                   display: 'inline-block', fontSize: 9, fontWeight: 700,
-                                  color: cand.source === 'google' ? '#4285F4' : '#e44f26',
-                                  background: cand.source === 'google' ? 'rgba(66,133,244,0.1)' : 'rgba(228,79,38,0.1)',
+                                  color: cand.source === 'google' ? '#4285F4'
+                                    : cand.source === 'hardcover' ? '#E8590C'
+                                    : '#e44f26',
+                                  background: cand.source === 'google' ? 'rgba(66,133,244,0.1)'
+                                    : cand.source === 'hardcover' ? 'rgba(232,89,12,0.1)'
+                                    : 'rgba(228,79,38,0.1)',
                                   padding: '1px 5px', borderRadius: 3, marginTop: 4,
                                 }}>
-                                  {cand.source === 'google' ? 'Google' : 'OpenLib'}
+                                  {cand.source === 'google' ? 'Google'
+                                    : cand.source === 'hardcover' ? 'Hardcover'
+                                    : 'OpenLib'}
                                 </span>
                               </button>
                             ))}
