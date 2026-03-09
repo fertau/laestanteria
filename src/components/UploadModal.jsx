@@ -5,8 +5,8 @@ import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { parseEpub } from '../lib/epubParser';
 import { parseFilename } from '../lib/parseFilename';
-import { fetchByISBN, searchByTitleAuthor as olSearch } from '../lib/openLibrary';
-import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch } from '../lib/googleBooks';
+import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from '../lib/openLibrary';
+import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from '../lib/googleBooks';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -125,6 +125,7 @@ export default function UploadModal({ onClose }) {
     // Merge: fill in what's missing
     // Priority: what's already set > Google Books > Open Library
     let enriched = false;
+    let foundCover = false;
 
     for (const result of apiResults) {
       if (!title && result.title) {
@@ -142,11 +143,13 @@ export default function UploadModal({ onClose }) {
       if (!coverUrl && !epubCoverUrl && result.coverUrl) {
         setCoverUrl(result.coverUrl);
         enriched = true;
+        foundCover = true;
       }
       // Prefer API cover over EPUB cover (usually higher quality)
-      if (epubCoverUrl && !coverUrl && result.coverUrl) {
+      if (epubCoverUrl && !coverUrl && !foundCover && result.coverUrl) {
         setCoverUrl(result.coverUrl);
         enriched = true;
+        foundCover = true;
       }
       if (!genre && result.genre) {
         // Try to map to our genre list
@@ -175,7 +178,7 @@ export default function UploadModal({ onClose }) {
       setMetaSource(bestSource);
     }
 
-    return enriched;
+    return { enriched, foundCover };
   };
 
   /**
@@ -294,13 +297,32 @@ export default function UploadModal({ onClose }) {
       const bestIsbn = fnIsbn;
 
       if (bestTitle || bestIsbn) {
-        const enriched = await enrichMetadata({
+        const enrichResult = await enrichMetadata({
           title: bestTitle,
           author: bestAuthor,
           isbn: bestIsbn,
         });
-        if (enriched) {
+        if (enrichResult?.enriched) {
           toast('Metadata completada con APIs externas', 'success');
+        }
+
+        // Fallback: broader cover search if enrichment didn't find a cover
+        if (!enrichResult?.foundCover) {
+          try {
+            const [gbC, olC] = await Promise.allSettled([
+              gbSearchCovers(bestTitle, bestAuthor, bestIsbn),
+              olSearchCovers(bestTitle, bestAuthor, bestIsbn),
+            ]);
+            const allCovers = [
+              ...(gbC.status === 'fulfilled' ? gbC.value : []),
+              ...(olC.status === 'fulfilled' ? olC.value : []),
+            ];
+            if (allCovers.length > 0) {
+              setCoverUrl(allCovers[0].url);
+            }
+          } catch {
+            // Silently fail
+          }
         }
       }
     } catch (err) {
@@ -308,7 +330,26 @@ export default function UploadModal({ onClose }) {
       // EPUB parse failed but we still have filename data — try APIs
       if (fnTitle || fnIsbn) {
         try {
-          await enrichMetadata({ title: fnTitle, author: fnAuthor, isbn: fnIsbn });
+          const enrichResult = await enrichMetadata({ title: fnTitle, author: fnAuthor, isbn: fnIsbn });
+
+          // Fallback cover search if enrichment didn't find a cover
+          if (!enrichResult?.foundCover) {
+            try {
+              const [gbC, olC] = await Promise.allSettled([
+                gbSearchCovers(fnTitle, fnAuthor, fnIsbn),
+                olSearchCovers(fnTitle, fnAuthor, fnIsbn),
+              ]);
+              const allCovers = [
+                ...(gbC.status === 'fulfilled' ? gbC.value : []),
+                ...(olC.status === 'fulfilled' ? olC.value : []),
+              ];
+              if (allCovers.length > 0) {
+                setCoverUrl(allCovers[0].url);
+              }
+            } catch {
+              // Silently fail
+            }
+          }
         } catch {
           // Silently fail
         }

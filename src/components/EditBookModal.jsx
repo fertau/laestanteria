@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olCovers } from '../lib/openLibrary';
@@ -75,7 +75,56 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   const [searchingCovers, setSearchingCovers] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
 
+  // Auto-search covers when opening a book with no cover (or blob: cover)
+  useEffect(() => {
+    if ((!book.coverUrl || book.coverUrl.startsWith('blob:')) && (book.title || book.isbn)) {
+      // Small delay to let the modal render first
+      const timer = setTimeout(() => {
+        doSearchCovers(book.title || '', book.author || '', book.isbn || '');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Search covers from multiple sources ---
+  const doSearchCovers = async (searchTitle, searchAuthor, searchIsbn) => {
+    if (!searchTitle && !searchIsbn) return;
+    setSearchingCovers(true);
+    setCoverOptions([]);
+    try {
+      const [gbResults, olResults] = await Promise.allSettled([
+        gbCovers(searchTitle, searchAuthor, searchIsbn),
+        olCovers(searchTitle, searchAuthor, searchIsbn),
+      ]);
+
+      const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
+      const ol = olResults.status === 'fulfilled' ? olResults.value : [];
+
+      const all = [...gb, ...ol];
+      const seen = new Set();
+      const unique = all.filter((c) => {
+        if (seen.has(c.url)) return false;
+        seen.add(c.url);
+        return true;
+      });
+
+      setCoverOptions(unique);
+
+      // Auto-select first cover if current one is empty/blob
+      if (unique.length > 0 && (!coverUrl || coverUrl.startsWith('blob:'))) {
+        setCoverUrl(unique[0].url);
+      }
+
+      if (unique.length === 0) {
+        toast('No se encontraron portadas', 'info');
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setSearchingCovers(false);
+    }
+  };
+
   const handleSearchCovers = async () => {
     if (!title.trim() && !isbn.trim()) {
       toast('Ingresa un titulo o ISBN primero', 'info');
@@ -112,19 +161,25 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     }
   };
 
-  // --- Search by ISBN ---
+  // --- Search by ISBN (metadata + covers in parallel) ---
   const handleISBNSearch = async () => {
     if (!isbn.trim()) return;
     setFetchingMeta(true);
+    setSearchingCovers(true);
+    setCoverOptions([]);
     try {
-      const [olResult, gbResult] = await Promise.allSettled([
+      // Search metadata AND covers in parallel for speed
+      const [olResult, gbResult, gbCoverResult, olCoverResult] = await Promise.allSettled([
         fetchByISBN(isbn),
         gbISBN(isbn),
+        gbCovers(title, author, isbn),
+        olCovers(title, author, isbn),
       ]);
 
       const ol = olResult.status === 'fulfilled' ? olResult.value : null;
       const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
 
+      // Apply metadata
       const best = gb || ol;
       if (best) {
         if (best.title) setTitle(best.title);
@@ -134,10 +189,26 @@ export default function EditBookModal({ book, onClose, onSaved }) {
           const mapped = mapGenre(best.genre);
           if (mapped) setGenre(mapped);
         }
-        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
-        if (bestCover) setCoverUrl(bestCover);
         if (best.language) setLanguage(best.language);
+      }
 
+      // Merge cover results
+      const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
+      const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
+      const all = [...gbC, ...olC];
+      const seen = new Set();
+      const unique = all.filter((c) => {
+        if (seen.has(c.url)) return false;
+        seen.add(c.url);
+        return true;
+      });
+      setCoverOptions(unique);
+
+      // Auto-select best cover (prefer metadata cover, then first from search)
+      const bestCover = gb?.coverUrl || ol?.coverUrl || (unique.length > 0 ? unique[0].url : '');
+      if (bestCover) setCoverUrl(bestCover);
+
+      if (best || unique.length > 0) {
         toast('Metadata encontrada!', 'success');
       } else {
         toast('No se encontro el ISBN en ninguna base de datos', 'info');
@@ -146,22 +217,28 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       toast('Error al buscar ISBN', 'error');
     } finally {
       setFetchingMeta(false);
+      setSearchingCovers(false);
     }
   };
 
-  // --- Search by title+author ---
+  // --- Search by title+author (metadata + covers in parallel) ---
   const handleTitleSearch = async () => {
     if (!title.trim()) return;
     setFetchingMeta(true);
+    setSearchingCovers(true);
+    setCoverOptions([]);
     try {
-      const [gbResult, olResult] = await Promise.allSettled([
+      const [gbResult, olResult, gbCoverResult, olCoverResult] = await Promise.allSettled([
         gbSearch(title, author),
         olSearch(title, author),
+        gbCovers(title, author, isbn),
+        olCovers(title, author, isbn),
       ]);
 
       const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
       const ol = olResult.status === 'fulfilled' ? olResult.value : null;
 
+      // Apply metadata
       const best = gb || ol;
       if (best) {
         if (best.description) setDescription(best.description);
@@ -169,11 +246,27 @@ export default function EditBookModal({ book, onClose, onSaved }) {
           const mapped = mapGenre(best.genre);
           if (mapped) setGenre(mapped);
         }
-        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
-        if (bestCover) setCoverUrl(bestCover);
         if (best.isbn) setIsbn(best.isbn);
         if (best.language) setLanguage(best.language);
+      }
 
+      // Merge cover results
+      const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
+      const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
+      const all = [...gbC, ...olC];
+      const seen = new Set();
+      const unique = all.filter((c) => {
+        if (seen.has(c.url)) return false;
+        seen.add(c.url);
+        return true;
+      });
+      setCoverOptions(unique);
+
+      // Auto-select best cover
+      const bestCover = gb?.coverUrl || ol?.coverUrl || (unique.length > 0 ? unique[0].url : '');
+      if (bestCover) setCoverUrl(bestCover);
+
+      if (best || unique.length > 0) {
         toast('Metadata encontrada!', 'success');
       } else {
         toast('No se encontraron resultados', 'info');
@@ -182,6 +275,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       toast('Error al buscar metadata', 'error');
     } finally {
       setFetchingMeta(false);
+      setSearchingCovers(false);
     }
   };
 

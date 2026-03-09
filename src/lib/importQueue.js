@@ -12,8 +12,8 @@
 import { parseFilename } from './parseFilename';
 import { parseEpub } from './epubParser';
 import { parseCalibreOpf, getCalibreCoverUrl } from './calibreParser';
-import { fetchByISBN, searchByTitleAuthor as olSearch } from './openLibrary';
-import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch } from './googleBooks';
+import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from './openLibrary';
+import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from './googleBooks';
 import { uploadEpubToDrive, shareWithServiceAccount } from './googleDrive';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -262,6 +262,25 @@ export async function processQueueItem(item, context, onUpdate) {
           }
         } catch {
           // Silently fail — EPUB/filename metadata is enough
+        }
+      }
+
+      // Fallback: if cover is still a blob: URL or empty, try broader cover search
+      if (!meta.coverUrl || meta.coverUrl.startsWith('blob:')) {
+        try {
+          const [gbC, olC] = await Promise.allSettled([
+            gbSearchCovers(meta.title, meta.author, meta.isbn),
+            olSearchCovers(meta.title, meta.author, meta.isbn),
+          ]);
+          const allCovers = [
+            ...(gbC.status === 'fulfilled' ? gbC.value : []),
+            ...(olC.status === 'fulfilled' ? olC.value : []),
+          ];
+          if (allCovers.length > 0) {
+            meta.coverUrl = allCovers[0].url;
+          }
+        } catch {
+          // Silently fail
         }
       }
     }
