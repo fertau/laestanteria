@@ -1,6 +1,6 @@
 {
-  "name": "la-estanteria-functions",
-  "description": "Cloud Functions for La estanteria",
+  "name": "la-cueva-functions",
+  "description": "Cloud Functions for La Cueva",
   "engines": {
     "node": "20"
   },

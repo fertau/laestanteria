@@ -158,7 +158,7 @@ exports.sendToKindle = onCall({ region: "us-central1", timeoutSeconds: 120 }, as
   await transporter.sendMail({
     from: process.env.KINDLE_SENDER_EMAIL || process.env.SMTP_USER,
     to: userData.kindleEmail,
-    subject: "Libro de La estanteria",
+    subject: "Libro de La Cueva",
     text: `${book.title} por ${book.author}`,
     attachments: [{
       filename: fileName,
@@ -274,8 +274,8 @@ exports.weeklyDigest = onSchedule("every monday 09:00", async () => {
       await transporter.sendMail({
         from: process.env.KINDLE_SENDER_EMAIL || process.env.SMTP_USER,
         to: user.email,
-        subject: "La estanteria — Resumen semanal",
-        text: `Hola ${user.displayName || ""},\n\nEsta semana se agregaron ${recentBooks.size} libros:\n\n${bookList}\n\nVisita ${appUrl} para explorar el catalogo.\n\nLa estanteria`,
+        subject: "La Cueva — Resumen semanal",
+        text: `Hola ${user.displayName || ""},\n\nEsta semana se agregaron ${recentBooks.size} libros:\n\n${bookList}\n\nVisita ${appUrl} para explorar el catalogo.\n\nLa Cueva`,
       });
     } catch (err) {
       console.error(`Error sending digest to ${user.email}:`, err.message);

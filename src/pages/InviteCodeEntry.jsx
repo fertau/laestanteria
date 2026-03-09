@@ -22,7 +22,7 @@ export default function InviteCodeEntry() {
     setLoading(true);
     try {
       await validateInviteCode(code);
-      toast('Bienvenido/a a La estanteria!', 'success');
+      toast('Bienvenido/a a La Cueva!', 'success');
       navigate('/', { replace: true });
     } catch (err) {
       toast(err.message, 'error');

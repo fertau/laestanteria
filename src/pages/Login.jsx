@@ -35,28 +35,31 @@ export default function Login() {
       minHeight: '100vh',
       padding: 20,
       textAlign: 'center',
+      background: 'var(--bg)',
     }}>
       {/* Logo SVG grande */}
-      <Logo size={80} />
+      <Logo size={100} />
 
-      {/* Name Logo tipográfico */}
-      <div style={{ marginTop: 16, marginBottom: 12 }}>
+      {/* Name Logo tipográfico stacked */}
+      <div style={{ marginTop: 20, marginBottom: 20 }}>
         <NameLogo size="lg" />
       </div>
 
-      {/* Subtítulo */}
+      {/* Tagline */}
       <p style={{
         color: 'var(--text-muted)',
         fontSize: 15,
-        fontWeight: 300,
-        fontFamily: 'var(--font-body)',
-        marginBottom: 40,
-        maxWidth: 320,
-        lineHeight: 1.5,
+        fontFamily: 'var(--font-display)',
+        fontStyle: 'italic',
+        fontWeight: 600,
+        marginBottom: 44,
+        maxWidth: 300,
+        lineHeight: 1.6,
       }}>
-        Tu biblioteca entre amigos
+        El refugio de tus libros favoritos, solo para amigos.
       </p>
 
+      {/* Botón "Entrar con Google" — estilo outlined */}
       <button
         onClick={handleSignIn}
         style={{
@@ -64,22 +67,23 @@ export default function Login() {
           alignItems: 'center',
           gap: 12,
           padding: '14px 28px',
-          background: '#fff',
-          color: '#333',
+          background: 'transparent',
+          color: 'var(--text)',
           borderRadius: 'var(--radius)',
           fontSize: 15,
           fontWeight: 600,
-          border: 'none',
+          fontFamily: 'var(--font-body)',
+          border: '1px solid var(--accent)',
           cursor: 'pointer',
-          transition: 'transform var(--transition), box-shadow var(--transition)',
+          transition: 'all var(--transition)',
         }}
         onMouseOver={(e) => {
+          e.currentTarget.style.background = 'rgba(193, 123, 63, 0.1)';
           e.currentTarget.style.transform = 'translateY(-1px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
         }}
         onMouseOut={(e) => {
+          e.currentTarget.style.background = 'transparent';
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = 'none';
         }}
       >
         <svg width="20" height="20" viewBox="0 0 48 48">
@@ -88,7 +92,7 @@ export default function Login() {
           <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
           <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
         </svg>
-        Iniciar sesión con Google
+        Entrar con Google
       </button>
 
       <p style={{

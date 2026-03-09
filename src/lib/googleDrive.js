@@ -44,28 +44,32 @@ async function driveRequest(url, options, accessToken) {
 }
 
 /**
- * Get or create the "La estanteria" folder in the user's Drive.
+ * Get or create the "La Cueva" folder in the user's Drive.
+ * Migration-safe: searches for both "La Cueva" (new) and "La estanteria" (legacy)
+ * so existing users' books remain accessible.
  * Returns the folder ID.
  */
 export async function getOrCreateFolder(accessToken) {
-  // Search for existing folder
+  // Search for both new and legacy folder names (migration-safe)
   const searchUrl = `${DRIVE_API}drive/v3/files?q=${encodeURIComponent(
-    `name='La estanteria' and mimeType='${FOLDER_MIME}' and trashed=false`
+    `(name='La Cueva' or name='La estanteria') and mimeType='${FOLDER_MIME}' and trashed=false`
   )}&fields=files(id,name)`;
 
   const searchRes = await driveRequest(searchUrl, {}, accessToken);
   const searchData = await searchRes.json();
 
   if (searchData.files?.length > 0) {
-    return searchData.files[0].id;
+    // Prefer "La Cueva" if both exist, otherwise use whichever is found
+    const cueva = searchData.files.find((f) => f.name === 'La Cueva');
+    return cueva ? cueva.id : searchData.files[0].id;
   }
 
-  // Create folder
+  // Create new folder with new name
   const createRes = await driveRequest(`${DRIVE_API}drive/v3/files`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: 'La estanteria',
+      name: 'La Cueva',
       mimeType: FOLDER_MIME,
     }),
   }, accessToken);
