@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useCollections } from '../hooks/useCollections';
@@ -6,6 +7,7 @@ import { useFollows } from '../hooks/useFollows';
 import { useRatings } from '../hooks/useRatings';
 import { useReadingStatus } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
+import { functions } from '../lib/firebase';
 import Stars from './Stars';
 import Avatar from './Avatar';
 import EditBookModal from './EditBookModal';
@@ -32,6 +34,7 @@ export default function BookModal({ book, onClose }) {
   const { toast } = useToast();
 
   const [downloading, setDownloading] = useState(false);
+  const [sendingKindle, setSendingKindle] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -68,13 +71,33 @@ export default function BookModal({ book, onClose }) {
   };
 
   const handleDownload = async () => {
-    // TODO: In Phase 4, this will call the generateDownloadLink Cloud Function
-    toast('La descarga se implementa en Fase 4 (Cloud Functions)', 'info');
+    setDownloading(true);
+    try {
+      const fn = httpsCallable(functions, 'generateDownloadLink');
+      const { data } = await fn({ bookId: book.id });
+      window.open(data.downloadUrl, '_blank');
+    } catch {
+      toast('Error al generar link de descarga', 'error');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleSendToKindle = async () => {
-    // TODO: In Phase 4, this will call the sendToKindle Cloud Function
-    toast('Envio a Kindle se implementa en Fase 4 (Cloud Functions)', 'info');
+    if (!user.kindleEmail) {
+      toast('Configura tu email Kindle en tu perfil primero', 'info');
+      return;
+    }
+    setSendingKindle(true);
+    try {
+      const fn = httpsCallable(functions, 'sendToKindle');
+      await fn({ bookId: book.id });
+      toast('Libro enviado a tu Kindle!', 'success');
+    } catch {
+      toast('Error al enviar a Kindle', 'error');
+    } finally {
+      setSendingKindle(false);
+    }
   };
 
   // Collections for this book
@@ -388,9 +411,10 @@ export default function BookModal({ book, onClose }) {
                   <button
                     className="btn btn-secondary"
                     onClick={handleSendToKindle}
+                    disabled={sendingKindle}
                     style={{ fontSize: 13 }}
                   >
-                    Enviar a Kindle
+                    {sendingKindle ? 'Enviando...' : 'Enviar a Kindle'}
                   </button>
                 </>
               )}
