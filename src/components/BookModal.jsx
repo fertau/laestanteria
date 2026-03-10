@@ -25,7 +25,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function BookModal({ book, onClose }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { deleteBook } = useBooks();
   const { collections, addBookToCollection, removeBookFromCollection } = useCollections();
   const { canDownloadFrom } = useFollows();
@@ -84,7 +84,7 @@ export default function BookModal({ book, onClose }) {
   };
 
   const handleSendToKindle = async () => {
-    if (!user.kindleEmail) {
+    if (!profile?.kindleEmail) {
       toast('Configura tu email Kindle en tu perfil primero', 'info');
       return;
     }
