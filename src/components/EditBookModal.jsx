@@ -23,6 +23,37 @@ const LANGUAGES = [
 ];
 
 /**
+ * Normalize a book title from API results:
+ * - Remove common noise: "(Spanish Edition)", "[Lingua spagnola]", etc.
+ * - Fix ALL CAPS → Title Case (but preserve short words like "de", "el", "y")
+ * - Collapse extra whitespace
+ */
+function normalizeTitle(raw) {
+  if (!raw) return '';
+  // Strip common edition/language tags (parenthesized or bracketed)
+  let t = raw
+    .replace(/[\(\[]\s*(Spanish|English|French|Portuguese|German|Italian)\s*(Edition|Ed\.?)?\s*[\)\]]/gi, '')
+    .replace(/[\(\[]\s*(Edici[oó]n\s*(en\s*)?(espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\)\]]/gi, '')
+    .replace(/[\(\[]\s*Lingua\s+\w+\s*[\)\]]/gi, '')
+    .replace(/\s*:\s*$/, '') // trailing colon left after stripping
+    .trim();
+
+  // Fix ALL CAPS (3+ uppercase words in a row = likely all-caps title)
+  const words = t.split(/\s+/);
+  const uppercaseCount = words.filter((w) => w.length > 1 && w === w.toUpperCase()).length;
+  if (uppercaseCount >= 2 && uppercaseCount >= words.length * 0.6) {
+    const minorWords = new Set(['de', 'del', 'el', 'la', 'los', 'las', 'y', 'e', 'o', 'u', 'en', 'a', 'al', 'un', 'una', 'the', 'of', 'and', 'in', 'or', 'to', 'for', 'on', 'at', 'by']);
+    t = words.map((w, i) => {
+      const lower = w.toLowerCase();
+      if (i > 0 && minorWords.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    }).join(' ');
+  }
+
+  return t.replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
  * Map a free-text genre string from APIs to one of our standard genres.
  */
 function mapGenre(genreStr) {
@@ -190,8 +221,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       // Apply metadata
       const best = gb || ol;
       if (best) {
-        if (best.title) setTitle(best.title);
-        if (best.author) setAuthor(best.author);
+        if (best.title) setTitle(normalizeTitle(best.title));
+        if (best.author) setAuthor(normalizeTitle(best.author));
         if (best.description) setDescription(best.description);
         if (best.genre) {
           const mapped = mapGenre(best.genre);
