@@ -75,7 +75,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   // Cover search state
   const [coverOptions, setCoverOptions] = useState([]);
   const [searchingCovers, setSearchingCovers] = useState(false);
-  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [searchingGI, setSearchingGI] = useState(false);
 
 
   // Auto-search covers when opening a book with no cover (or blob: cover)
@@ -95,19 +95,17 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResults, olResults, hcResults, giResults] = await Promise.allSettled([
+      const [gbResults, olResults, hcResults] = await Promise.allSettled([
         gbCovers(searchTitle, searchAuthor, searchIsbn, lang),
         olCovers(searchTitle, searchAuthor, searchIsbn, lang),
         hcCovers(searchTitle, searchAuthor, searchIsbn),
-        giCovers(searchTitle, searchAuthor, searchIsbn, lang),
       ]);
 
       const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
       const ol = olResults.status === 'fulfilled' ? olResults.value : [];
       const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
-      const gi = giResults.status === 'fulfilled' ? giResults.value : [];
 
-      const all = [...gb, ...ol, ...hc, ...gi];
+      const all = [...gb, ...ol, ...hc];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -140,20 +138,18 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResults, olResults, hcResults, giResults] = await Promise.allSettled([
+      const [gbResults, olResults, hcResults] = await Promise.allSettled([
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
-        giCovers(title, author, isbn, language),
       ]);
 
       const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
       const ol = olResults.status === 'fulfilled' ? olResults.value : [];
       const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
-      const gi = giResults.status === 'fulfilled' ? giResults.value : [];
 
       // Merge and deduplicate
-      const all = [...gb, ...ol, ...hc, ...gi];
+      const all = [...gb, ...ol, ...hc];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -180,13 +176,12 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setCoverOptions([]);
     try {
       // Search metadata AND covers in parallel for speed
-      const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult, giCoverResult] = await Promise.allSettled([
+      const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
         fetchByISBN(isbn),
         gbISBN(isbn),
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
-        giCovers(title, author, isbn, language),
       ]);
 
       const ol = olResult.status === 'fulfilled' ? olResult.value : null;
@@ -209,8 +204,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
       const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
       const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const giC = giCoverResult.status === 'fulfilled' ? giCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC, ...giC];
+      const all = [...gbC, ...olC, ...hcC];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -243,13 +237,12 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     setSearchingCovers(true);
     setCoverOptions([]);
     try {
-      const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult, giCoverResult] = await Promise.allSettled([
+      const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
         gbSearch(title, author, language),
         olSearch(title, author, language),
         gbCovers(title, author, isbn, language),
         olCovers(title, author, isbn, language),
         hcCovers(title, author, isbn),
-        giCovers(title, author, isbn, language),
       ]);
 
       const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
@@ -271,8 +264,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
       const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
       const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const giC = giCoverResult.status === 'fulfilled' ? giCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC, ...giC];
+      const all = [...gbC, ...olC, ...hcC];
       const seen = new Set();
       const unique = all.filter((c) => {
         if (seen.has(c.url)) return false;
@@ -295,6 +287,37 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     } finally {
       setFetchingMeta(false);
       setSearchingCovers(false);
+    }
+  };
+
+  // --- Magic wand: Google Image Search (manual, appends to existing results) ---
+  const handleGoogleImageSearch = async () => {
+    if (!title.trim() && !isbn.trim()) {
+      toast('Ingresa un titulo o ISBN primero', 'info');
+      return;
+    }
+    setSearchingGI(true);
+    try {
+      const results = await giCovers(title, author, isbn, language);
+      if (results.length === 0) {
+        toast('Google Images no encontro portadas', 'info');
+        return;
+      }
+      // Append to existing coverOptions, deduplicating
+      setCoverOptions((prev) => {
+        const seen = new Set(prev.map((c) => c.url));
+        const newCovers = results.filter((c) => !seen.has(c.url));
+        if (newCovers.length === 0) {
+          toast('No hay portadas nuevas de Google Images', 'info');
+          return prev;
+        }
+        toast(`${newCovers.length} portadas nuevas de Google Images`, 'success');
+        return [...prev, ...newCovers];
+      });
+    } catch {
+      toast('Error al buscar en Google Images', 'error');
+    } finally {
+      setSearchingGI(false);
     }
   };
 
@@ -424,15 +447,27 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 )}
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={handleSearchCovers}
-                  disabled={searchingCovers || (!title.trim() && !isbn.trim())}
-                  className="btn btn-primary"
-                  style={{ fontSize: 12 }}
-                >
-                  {searchingCovers ? 'Buscando...' : 'Buscar portada'}
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={handleSearchCovers}
+                    disabled={searchingCovers || (!title.trim() && !isbn.trim())}
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, flex: 1 }}
+                  >
+                    {searchingCovers ? 'Buscando...' : 'Buscar portada'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoogleImageSearch}
+                    disabled={searchingGI || searchingCovers || (!title.trim() && !isbn.trim())}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 14, padding: '4px 10px' }}
+                    title="Buscar portadas en Google Images"
+                  >
+                    {searchingGI ? '...' : '✨'}
+                  </button>
+                </div>
                 {coverUrl && (
                   <button
                     type="button"
@@ -443,22 +478,12 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                     Quitar portada
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowUrlInput(!showUrlInput)}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11 }}
-                >
-                  {showUrlInput ? 'Ocultar URL' : 'Pegar URL manual'}
-                </button>
-                {showUrlInput && (
-                  <input
-                    value={coverUrl}
-                    onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="https://..."
-                    style={{ fontSize: 12 }}
-                  />
-                )}
+                <input
+                  value={coverUrl}
+                  onChange={(e) => setCoverUrl(e.target.value)}
+                  placeholder="Pegar URL de portada..."
+                  style={{ fontSize: 12 }}
+                />
               </div>
             </div>
 
@@ -473,7 +498,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 color: 'var(--text-muted)',
               }}>
                 <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                Buscando en Google Books, Open Library, Hardcover y Google Images...
+                Buscando en Google Books, Open Library y Hardcover...
               </div>
             )}
 
