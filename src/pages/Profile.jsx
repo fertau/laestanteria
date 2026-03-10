@@ -68,6 +68,7 @@ export default function Profile() {
     toast('Email Kindle guardado', 'success');
   };
 
+
   if (!profileData) {
     return (
       <div className="page">
@@ -243,6 +244,7 @@ export default function Profile() {
               Cambiar
             </button>
           </div>
+
         </>
       )}
 

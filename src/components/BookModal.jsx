@@ -8,6 +8,7 @@ import { useRatings } from '../hooks/useRatings';
 import { useReadingStatus } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import { functions } from '../lib/firebase';
+import { shareWithServiceAccount } from '../lib/googleDrive';
 import Stars from './Stars';
 import Avatar from './Avatar';
 import EditBookModal from './EditBookModal';
@@ -25,7 +26,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function BookModal({ book, onClose }) {
-  const { user, profile } = useAuth();
+  const { user, profile, getAccessToken } = useAuth();
   const { deleteBook } = useBooks();
   const { collections, addBookToCollection, removeBookFromCollection } = useCollections();
   const { canDownloadFrom } = useFollows();
@@ -70,9 +71,24 @@ export default function BookModal({ book, onClose }) {
     }
   };
 
+  // Ensure the Drive file is shared with the service account before Cloud Functions access it
+  const ensureDriveSharing = async () => {
+    const saEmail = import.meta.env.VITE_SERVICE_ACCOUNT_EMAIL;
+    if (!saEmail || !book.driveFileId) return;
+    try {
+      const accessToken = await getAccessToken();
+      if (accessToken) {
+        await shareWithServiceAccount(accessToken, book.driveFileId, saEmail);
+      }
+    } catch {
+      // Sharing may already exist (409) — safe to ignore
+    }
+  };
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
+      await ensureDriveSharing();
       const fn = httpsCallable(functions, 'generateDownloadLink');
       const { data } = await fn({ bookId: book.id });
       window.open(data.downloadUrl, '_blank');
@@ -90,11 +106,14 @@ export default function BookModal({ book, onClose }) {
     }
     setSendingKindle(true);
     try {
+      await ensureDriveSharing();
       const fn = httpsCallable(functions, 'sendToKindle');
       await fn({ bookId: book.id });
       toast('Libro enviado a tu Kindle!', 'success');
-    } catch {
-      toast('Error al enviar a Kindle', 'error');
+    } catch (err) {
+      const msg = err?.message || err?.details || 'Error desconocido';
+      console.error('sendToKindle error:', err);
+      toast(`Error al enviar a Kindle: ${msg}`, 'error');
     } finally {
       setSendingKindle(false);
     }
