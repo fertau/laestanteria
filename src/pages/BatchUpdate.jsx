@@ -4,6 +4,23 @@ import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { buildBatchItem, processBatchItem, applyBatchItem, reSearchBatchItem, buildDiffFromCandidate } from '../lib/batchQueue';
+import { searchCovers as giCovers } from '../lib/googleImageSearch';
+
+const GENRES = [
+  'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
+  'Romance', 'Historia', 'Ciencia', 'Filosofia', 'Biografia',
+  'Autoayuda', 'Negocios', 'Arte', 'Poesia', 'Infantil', 'Otro',
+];
+
+const LANGUAGES = [
+  { value: 'es', label: 'Espanol' },
+  { value: 'en', label: 'Ingles' },
+  { value: 'pt', label: 'Portugues' },
+  { value: 'fr', label: 'Frances' },
+  { value: 'de', label: 'Aleman' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'other', label: 'Otro' },
+];
 
 const FILTERS = [
   { value: 'all', label: 'Todos' },
@@ -44,6 +61,7 @@ export default function BatchUpdate() {
 
   // Review phase state
   const [expandedIds, setExpandedIds] = useState(new Set());
+  const [giSearchingId, setGiSearchingId] = useState(null);
 
   // Re-search state
   const [reSearchId, setReSearchId] = useState(null);
@@ -220,13 +238,66 @@ export default function BatchUpdate() {
   const selectCover = (bookId, url) => {
     setQueue((prev) =>
       prev.map((item) => {
-        if (item.id !== bookId || !item.diff?.coverUrl) return item;
+        if (item.id !== bookId) return item;
+        const oldCover = (item.book.coverUrl || '').trim();
         return {
           ...item,
-          diff: { ...item.diff, coverUrl: { ...item.diff.coverUrl, new: url, accepted: true } },
+          diff: {
+            ...item.diff,
+            coverUrl: { old: item.diff?.coverUrl?.old ?? oldCover, new: url, accepted: true },
+          },
         };
       }),
     );
+  };
+
+  const editDiffField = useCallback((bookId, field, newValue) => {
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (item.id !== bookId) return item;
+        if (item.diff?.[field]) {
+          return {
+            ...item,
+            diff: { ...item.diff, [field]: { ...item.diff[field], new: newValue, accepted: true } },
+          };
+        }
+        // Create diff entry if it didn't exist
+        const oldVal = (item.book[field] || '').toString().trim();
+        if (newValue.trim() && newValue.trim() !== oldVal) {
+          return {
+            ...item,
+            diff: { ...item.diff, [field]: { old: oldVal, new: newValue, accepted: true } },
+          };
+        }
+        return item;
+      }),
+    );
+  }, []);
+
+  const handleGoogleImageSearch = async (bookId) => {
+    const item = queue.find((q) => q.id === bookId);
+    if (!item) return;
+    const t = item.diff?.title?.new || item.book.title || '';
+    const a = item.diff?.author?.new || item.book.author || '';
+    const i = item.diff?.isbn?.new || item.book.isbn || '';
+    const lang = item.diff?.language?.new || item.book.language || 'es';
+    if (!t.trim() && !i.trim()) { toast('Sin titulo o ISBN para buscar', 'info'); return; }
+    setGiSearchingId(bookId);
+    try {
+      const results = await giCovers(t, a, i, lang);
+      if (results.length === 0) { toast('Google Images no encontro portadas', 'info'); return; }
+      setQueue((prev) =>
+        prev.map((qi) => {
+          if (qi.id !== bookId) return qi;
+          const existing = new Set((qi.coverOptions || []).map((c) => c.url));
+          const newCovers = results.filter((c) => !existing.has(c.url));
+          if (newCovers.length === 0) { toast('No hay portadas nuevas', 'info'); return qi; }
+          toast(`${newCovers.length} portadas de Google Images`, 'success');
+          return { ...qi, coverOptions: [...(qi.coverOptions || []), ...newCovers] };
+        }),
+      );
+    } catch { toast('Error al buscar en Google Images', 'error'); }
+    finally { setGiSearchingId(null); }
   };
 
   // --- Candidate selection ---
@@ -842,92 +913,109 @@ export default function BatchUpdate() {
                         </div>
                       )}
 
-                      {/* Field diffs */}
+                      {/* Cover section — always visible when expanded */}
+                      {isExpanded && (
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Portada</div>
+                            <button
+                              type="button"
+                              onClick={() => handleGoogleImageSearch(item.id)}
+                              disabled={giSearchingId === item.id}
+                              className="btn btn-secondary"
+                              style={{ fontSize: 14, padding: '2px 8px', marginLeft: 'auto' }}
+                              title="Buscar portadas en Google Images"
+                            >
+                              {giSearchingId === item.id ? '...' : '✨'}
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ width: 40, height: 60, borderRadius: 3, background: 'var(--bg)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {item.book.coverUrl && !item.book.coverUrl.startsWith('blob:') ? (
+                                <img src={item.book.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                              ) : (
+                                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>sin</span>
+                              )}
+                            </div>
+                            <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>→</span>
+                            <div style={{ width: 40, height: 60, borderRadius: 3, border: item.diff?.coverUrl?.new ? '2px solid var(--accent)' : '2px dashed var(--border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {item.diff?.coverUrl?.new ? (
+                                <img src={item.diff.coverUrl.new} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                              ) : (
+                                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>sin</span>
+                              )}
+                            </div>
+                            {item.diff?.coverUrl && (
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)' }}>
+                                <input type="checkbox" checked={item.diff.coverUrl.accepted} onChange={() => toggleDiffField(item.id, 'coverUrl')} />
+                                Aceptar
+                              </label>
+                            )}
+                          </div>
+                          {(item.coverOptions?.length || 0) > 0 && (
+                            <>
+                              <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
+                                {item.coverOptions.length} portadas disponibles:
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                                {item.coverOptions.map((opt, oi) => (
+                                  <button key={oi} type="button" onClick={() => selectCover(item.id, opt.url)} style={{
+                                    flexShrink: 0, width: 40, height: 60, padding: 0,
+                                    border: item.diff?.coverUrl?.new === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
+                                    borderRadius: 3, overflow: 'hidden', cursor: 'pointer', background: 'var(--bg)',
+                                  }} title={`${opt.label} (${opt.source})`}>
+                                    <img src={opt.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          <input
+                            value={item.diff?.coverUrl?.new || ''}
+                            onChange={(e) => selectCover(item.id, e.target.value)}
+                            placeholder="Pegar URL de portada..."
+                            style={{ fontSize: 11, marginTop: 6, width: '100%', maxWidth: 320 }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Field diffs (editable, excluding coverUrl) */}
                       {hasDiff && (
                         <div style={{ padding: '0 12px 12px' }}>
-                          {diffEntries.map(([field, change]) => (
+                          {diffEntries.filter(([field]) => field !== 'coverUrl').map(([field, change]) => (
                             <div key={field} style={{ padding: '6px 0', borderTop: '1px solid var(--border)' }}>
-                              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                                 <input
                                   type="checkbox"
                                   checked={change.accepted}
                                   onChange={() => toggleDiffField(item.id, field)}
-                                  style={{ marginTop: 2 }}
+                                  style={{ marginTop: 8, flexShrink: 0 }}
                                 />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 2 }}>
                                     {FIELD_LABELS[field] || field}
                                   </div>
-                                  {field === 'coverUrl' ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <div style={{
-                                        width: 40, height: 60, borderRadius: 3,
-                                        background: 'var(--bg)', overflow: 'hidden',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      }}>
-                                        {change.old && !change.old.startsWith('blob:') ? (
-                                          <img src={change.old} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
-                                        ) : (
-                                          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>sin</span>
-                                        )}
-                                      </div>
-                                      <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>→</span>
-                                      <div style={{ width: 40, height: 60, borderRadius: 3, border: '2px solid var(--accent)', overflow: 'hidden' }}>
-                                        <img src={change.new} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
-                                      </div>
-                                    </div>
+                                  {change.old ? (
+                                    <div style={{ fontSize: 11, color: 'var(--text-dim)', textDecoration: 'line-through', marginBottom: 4 }}>{change.old}</div>
                                   ) : (
-                                    <div style={{ fontSize: 12 }}>
-                                      {change.old ? (
-                                        <span>
-                                          <span style={{ color: 'var(--text-dim)', textDecoration: 'line-through' }}>{change.old}</span>
-                                          {' → '}
-                                        </span>
-                                      ) : (
-                                        <span style={{ color: 'var(--text-dim)' }}>(vacio) → </span>
-                                      )}
-                                      <span style={{ color: 'var(--success)' }}>{change.new}</span>
-                                    </div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>(vacio)</div>
+                                  )}
+                                  {field === 'genre' ? (
+                                    <select value={change.new} onChange={(e) => editDiffField(item.id, field, e.target.value)} style={{ fontSize: 12, width: '100%' }}>
+                                      <option value="">Sin genero</option>
+                                      {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                  ) : field === 'language' ? (
+                                    <select value={change.new} onChange={(e) => editDiffField(item.id, field, e.target.value)} style={{ fontSize: 12, width: '100%' }}>
+                                      {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                    </select>
+                                  ) : field === 'description' ? (
+                                    <textarea value={change.new} onChange={(e) => editDiffField(item.id, field, e.target.value)} rows={2} style={{ fontSize: 12, width: '100%', resize: 'vertical' }} />
+                                  ) : (
+                                    <input value={change.new} onChange={(e) => editDiffField(item.id, field, e.target.value)} style={{ fontSize: 12, width: '100%' }} />
                                   )}
                                 </div>
-                              </label>
-
-                              {/* Cover options gallery + manual URL */}
-                              {field === 'coverUrl' && (
-                                <div style={{ marginTop: 8, marginLeft: 28 }}>
-                                  {item.coverOptions?.length > 1 && (
-                                    <>
-                                      <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
-                                        Otras portadas disponibles:
-                                      </div>
-                                      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                                        {item.coverOptions.map((opt, oi) => (
-                                          <button
-                                            key={oi}
-                                            type="button"
-                                            onClick={() => selectCover(item.id, opt.url)}
-                                            style={{
-                                              flexShrink: 0, width: 40, height: 60, padding: 0,
-                                              border: change.new === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
-                                              borderRadius: 3, overflow: 'hidden', cursor: 'pointer', background: 'var(--bg)',
-                                            }}
-                                            title={`${opt.label} (${opt.source})`}
-                                          >
-                                            <img src={opt.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </>
-                                  )}
-                                  <input
-                                    placeholder="Pegar URL de portada..."
-                                    defaultValue=""
-                                    onBlur={(e) => { if (e.target.value.trim()) selectCover(item.id, e.target.value.trim()); }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); selectCover(item.id, e.target.value.trim()); } }}
-                                    style={{ fontSize: 11, marginTop: 6, width: '100%', maxWidth: 320 }}
-                                  />
-                                </div>
-                              )}
+                              </div>
                             </div>
                           ))}
                         </div>
