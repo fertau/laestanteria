@@ -150,8 +150,28 @@ exports.sendToKindle = onCall({ region: "us-central1", timeoutSeconds: 120 }, as
     { responseType: "arraybuffer" },
   );
 
-  const buffer = Buffer.from(response.data);
-  const fileName = `${book.author} - ${book.title}.epub`;
+  const epubBuffer = Buffer.from(response.data);
+  const baseName = `${book.author} - ${book.title}`.replace(/[/\\?%*:|"<>]/g, "-");
+
+  // Gmail blocks .epub attachments as a security risk.
+  // Wrap the EPUB in a proper ZIP so Gmail allows it through.
+  // Kindle accepts .zip files and will extract the EPUB inside.
+  const archiver = require("archiver");
+  const { PassThrough } = require("stream");
+
+  const zipBuffer = await new Promise((resolve, reject) => {
+    const chunks = [];
+    const passthrough = new PassThrough();
+    passthrough.on("data", (chunk) => chunks.push(chunk));
+    passthrough.on("end", () => resolve(Buffer.concat(chunks)));
+    passthrough.on("error", reject);
+
+    const archive = archiver("zip", { zlib: { level: 1 } });
+    archive.on("error", reject);
+    archive.pipe(passthrough);
+    archive.append(epubBuffer, { name: `${baseName}.epub` });
+    archive.finalize();
+  });
 
   // Send via email
   const transporter = getTransporter();
@@ -161,9 +181,9 @@ exports.sendToKindle = onCall({ region: "us-central1", timeoutSeconds: 120 }, as
     subject: "Libro de La estanteria",
     text: `${book.title} por ${book.author}`,
     attachments: [{
-      filename: fileName,
-      content: buffer,
-      contentType: "application/epub+zip",
+      filename: `${baseName}.zip`,
+      content: zipBuffer,
+      contentType: "application/zip",
     }],
   });
 
