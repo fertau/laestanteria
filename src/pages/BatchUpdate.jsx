@@ -892,29 +892,40 @@ export default function BatchUpdate() {
                                 </div>
                               </label>
 
-                              {/* Cover options gallery */}
-                              {field === 'coverUrl' && item.coverOptions?.length > 1 && (
+                              {/* Cover options gallery + manual URL */}
+                              {field === 'coverUrl' && (
                                 <div style={{ marginTop: 8, marginLeft: 28 }}>
-                                  <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
-                                    Otras portadas disponibles:
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
-                                    {item.coverOptions.map((opt, oi) => (
-                                      <button
-                                        key={oi}
-                                        type="button"
-                                        onClick={() => selectCover(item.id, opt.url)}
-                                        style={{
-                                          flexShrink: 0, width: 40, height: 60, padding: 0,
-                                          border: change.new === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
-                                          borderRadius: 3, overflow: 'hidden', cursor: 'pointer', background: 'var(--bg)',
-                                        }}
-                                        title={`${opt.label} (${opt.source})`}
-                                      >
-                                        <img src={opt.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
-                                      </button>
-                                    ))}
-                                  </div>
+                                  {item.coverOptions?.length > 1 && (
+                                    <>
+                                      <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
+                                        Otras portadas disponibles:
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                                        {item.coverOptions.map((opt, oi) => (
+                                          <button
+                                            key={oi}
+                                            type="button"
+                                            onClick={() => selectCover(item.id, opt.url)}
+                                            style={{
+                                              flexShrink: 0, width: 40, height: 60, padding: 0,
+                                              border: change.new === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
+                                              borderRadius: 3, overflow: 'hidden', cursor: 'pointer', background: 'var(--bg)',
+                                            }}
+                                            title={`${opt.label} (${opt.source})`}
+                                          >
+                                            <img src={opt.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.parentElement.style.display = 'none'; }} />
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                  <input
+                                    placeholder="Pegar URL de portada..."
+                                    defaultValue=""
+                                    onBlur={(e) => { if (e.target.value.trim()) selectCover(item.id, e.target.value.trim()); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); selectCover(item.id, e.target.value.trim()); } }}
+                                    style={{ fontSize: 11, marginTop: 6, width: '100%', maxWidth: 320 }}
+                                  />
                                 </div>
                               )}
                             </div>
