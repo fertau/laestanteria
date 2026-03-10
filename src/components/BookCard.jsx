@@ -25,31 +25,16 @@ export default function BookCard({
 
   return (
     <div
+      className={`book-card${selectionMode && !isSelectable ? ' book-card--disabled' : ''}`}
       onClick={handleClick}
       style={{
-        cursor: selectionMode && !isSelectable ? 'default' : 'pointer',
-        borderRadius: 'var(--radius)',
-        overflow: 'hidden',
-        background: 'var(--surface)',
-        transition: 'transform var(--transition), box-shadow var(--transition), border-color var(--transition), opacity var(--transition)',
         animation: `fadeInUp 0.3s ease ${animationDelay}ms both`,
-        position: 'relative',
         border: selectionMode && isSelected
           ? '2px solid var(--accent)'
           : '2px solid transparent',
         opacity: selectionMode && !isSelectable ? 0.4 : 1,
         pointerEvents: selectionMode && !isSelectable ? 'none' : 'auto',
         ...style,
-      }}
-      onMouseOver={(e) => {
-        if (selectionMode) return;
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
-      }}
-      onMouseOut={(e) => {
-        if (selectionMode) return;
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
       }}
     >
       {/* Cover */}
@@ -199,12 +184,6 @@ export default function BookCard({
         )}
       </div>
 
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

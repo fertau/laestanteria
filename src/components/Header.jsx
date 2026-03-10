@@ -2,13 +2,14 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Logo from './Logo';
 import NameLogo from './NameLogo';
+import { Home, BookOpen, Users, Layers, BarChart3, Bell } from 'lucide-react';
 
 const navItems = [
-  { path: '/', label: 'Inicio', icon: '~' },
-  { path: '/catalog', label: 'Catalogo', icon: '#' },
-  { path: '/people', label: 'Personas', icon: '@' },
-  { path: '/collections', label: 'Colecciones', icon: '=' },
-  { path: '/stats', label: 'Stats', icon: '%' },
+  { path: '/', label: 'Inicio', icon: Home },
+  { path: '/catalog', label: 'Catalogo', icon: BookOpen },
+  { path: '/people', label: 'Personas', icon: Users },
+  { path: '/collections', label: 'Colecciones', icon: Layers },
+  { path: '/stats', label: 'Stats', icon: BarChart3 },
 ];
 
 export default function Header({ notificationCount = 0 }) {
@@ -48,24 +49,31 @@ export default function Header({ notificationCount = 0 }) {
 
         {/* Navigation */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              title={item.label}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 'var(--radius)',
-                fontSize: 13,
-                fontWeight: location.pathname === item.path ? 600 : 400,
-                color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-muted)',
-                textDecoration: 'none',
-                transition: 'color var(--transition)',
-              }}
-            >
-              <span className="nav-label">{item.label}</span>
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                title={item.label}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius)',
+                  fontSize: 13,
+                  fontWeight: location.pathname === item.path ? 600 : 400,
+                  color: location.pathname === item.path ? 'var(--accent)' : 'var(--text-muted)',
+                  textDecoration: 'none',
+                  transition: 'color var(--transition)',
+                }}
+              >
+                <Icon size={16} />
+                <span className="nav-label">{item.label}</span>
+              </Link>
+            );
+          })}
 
           <Link
             to="/notifications"
@@ -78,7 +86,7 @@ export default function Header({ notificationCount = 0 }) {
               fontSize: 16,
             }}
           >
-            {'!'}
+            <Bell size={18} />
             {notificationCount > 0 && (
               <span style={{
                 position: 'absolute',

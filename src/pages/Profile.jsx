@@ -8,6 +8,7 @@ import { useFollows } from '../hooks/useFollows';
 import { useAllReadingStatuses } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import BookGrid from '../components/BookGrid';
+import BookCard from '../components/BookCard';
 import BookModal from '../components/BookModal';
 
 export default function Profile() {
@@ -160,42 +161,15 @@ export default function Profile() {
         )}
       </div>
 
-      {/* My uploaded books */}
-      {myBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Libros subidos</h2>
-          <BookGrid books={myBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {/* Reading status sections (own profile only) */}
-      {isOwnProfile && readingBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Leyendo</h2>
-          <BookGrid books={readingBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {isOwnProfile && wantBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Quiero leer</h2>
-          <BookGrid books={wantBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {isOwnProfile && finishedBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Leidos</h2>
-          <BookGrid books={finishedBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {/* Own profile sections */}
+      {/* Own profile: Kindle + Privacy settings (above books for visibility) */}
       {isOwnProfile && (
         <>
           {/* Kindle config */}
-          <div style={{ marginBottom: 32 }}>
-            <h2 className="section-title">Configuracion Kindle</h2>
+          <div style={{ marginBottom: 24 }}>
+            <h2 className="section-title">
+              <span>Configuracion Kindle</span>
+              <Link to="/tutorial" className="section-link">Ver tutorial →</Link>
+            </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
               Para recibir libros en tu Kindle, ingresa tu direccion @kindle.com y autoriza el remitente en{' '}
               <a href="https://www.amazon.com/mycd" target="_blank" rel="noopener noreferrer">
@@ -218,7 +192,7 @@ export default function Profile() {
           </div>
 
           {/* Privacy mode */}
-          <div style={{ marginBottom: 32 }}>
+          <div style={{ marginBottom: 24 }}>
             <h2 className="section-title">Privacidad</h2>
             <div style={{
               display: 'flex',
@@ -252,7 +226,71 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Invite codes */}
+          <div className="divider" />
+        </>
+      )}
+
+      {/* My uploaded books */}
+      {myBooks.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2 className="section-title">Libros subidos</h2>
+          <BookGrid books={myBooks} onBookClick={setSelectedBook} />
+        </section>
+      )}
+
+      {/* Reading status sections (own profile only) — horizontal rows */}
+      {isOwnProfile && readingBooks.length > 0 && (
+        <section style={{ marginBottom: 28 }}>
+          <div className="section-title">
+            <span>Leyendo</span>
+            <Link to="/catalog" className="section-link">Ver mas ({readingBooks.length}) →</Link>
+          </div>
+          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
+            {readingBooks.slice(0, 6).map((book) => (
+              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
+                <BookCard book={book} onClick={setSelectedBook} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isOwnProfile && wantBooks.length > 0 && (
+        <section style={{ marginBottom: 28 }}>
+          <div className="section-title">
+            <span>Quiero leer</span>
+            <Link to="/catalog" className="section-link">Ver mas ({wantBooks.length}) →</Link>
+          </div>
+          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
+            {wantBooks.slice(0, 6).map((book) => (
+              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
+                <BookCard book={book} onClick={setSelectedBook} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isOwnProfile && finishedBooks.length > 0 && (
+        <section style={{ marginBottom: 28 }}>
+          <div className="section-title">
+            <span>Leidos</span>
+            <Link to="/catalog" className="section-link">Ver mas ({finishedBooks.length}) →</Link>
+          </div>
+          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
+            {finishedBooks.slice(0, 6).map((book) => (
+              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
+                <BookCard book={book} onClick={setSelectedBook} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Invite codes (own profile, bottom section) */}
+      {isOwnProfile && (
+        <>
+          <div className="divider" />
           <div style={{ marginBottom: 32 }}>
             <h2 className="section-title">Codigos de invitacion</h2>
             <button onClick={handleGenerateCode} className="btn btn-primary" style={{ marginBottom: 16 }}>

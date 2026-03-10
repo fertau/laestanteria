@@ -11,7 +11,9 @@ export default function PrivateRoute({ children }) {
       <div className="loading-screen">
         <Logo size={48} />
         <NameLogo size="md" />
-        <div className="spinner" />
+        <div className="progress-bar" style={{ marginTop: 8 }}>
+          <div className="progress-bar-fill" />
+        </div>
       </div>
     );
   }

@@ -164,8 +164,13 @@ export default function Catalog() {
 
   if (loading) {
     return (
-      <div className="page" style={{ textAlign: 'center', paddingTop: 60 }}>
-        <div className="spinner" style={{ margin: '0 auto' }} />
+      <div className="page">
+        <div className="skeleton skeleton-title" style={{ marginBottom: 24 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(145px, 1fr))', gap: 16 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="skeleton skeleton-card" />
+          ))}
+        </div>
       </div>
     );
   }

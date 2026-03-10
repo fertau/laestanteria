@@ -18,6 +18,7 @@ import Stats from './pages/Stats';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import BatchUpdate from './pages/BatchUpdate';
+import Tutorial from './pages/Tutorial';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/stats" element={<PrivateRoute><Stats /></PrivateRoute>} />
             <Route path="/profile/:uid" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+            <Route path="/tutorial" element={<PrivateRoute><Tutorial /></PrivateRoute>} />
           </Routes>
           <BottomNav />
           <ToastContainer />

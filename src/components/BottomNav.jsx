@@ -1,12 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Home, BookOpen, Users, Layers, BarChart3 } from 'lucide-react';
 
 const items = [
-  { path: '/', label: 'Inicio', icon: '~' },
-  { path: '/catalog', label: 'Catalogo', icon: '#' },
-  { path: '/people', label: 'Personas', icon: '@' },
-  { path: '/collections', label: 'Colecciones', icon: '=' },
-  { path: '/stats', label: 'Stats', icon: '%' },
+  { path: '/', label: 'Inicio', icon: Home },
+  { path: '/catalog', label: 'Catalogo', icon: BookOpen },
+  { path: '/people', label: 'Personas', icon: Users },
+  { path: '/collections', label: 'Colecciones', icon: Layers },
+  { path: '/stats', label: 'Stats', icon: BarChart3 },
 ];
 
 export default function BottomNav() {
@@ -17,16 +18,19 @@ export default function BottomNav() {
 
   return (
     <nav className="bottom-nav">
-      {items.map((item) => (
-        <Link
-          key={item.path}
-          to={item.path}
-          className={location.pathname === item.path ? 'active' : ''}
-        >
-          <span className="nav-icon">{item.icon}</span>
-          <span>{item.label}</span>
-        </Link>
-      ))}
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={location.pathname === item.path ? 'active' : ''}
+          >
+            <Icon size={20} />
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }

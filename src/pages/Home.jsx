@@ -55,8 +55,16 @@ export default function Home() {
 
   if (booksLoading) {
     return (
-      <div className="page" style={{ textAlign: 'center', paddingTop: 60 }}>
-        <div className="spinner" style={{ margin: '0 auto' }} />
+      <div className="page">
+        <div style={{ marginBottom: 24 }}>
+          <div className="skeleton skeleton-title" />
+          <div className="skeleton skeleton-text" style={{ width: '40%' }} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 14 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton skeleton-card" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -120,9 +128,14 @@ export default function Home() {
             <p style={{ color: 'var(--text-muted)', marginBottom: 20, fontSize: 14 }}>
               Empezá siguiendo a alguien del grupo para ver sus libros.
             </p>
-            <Link to="/people" className="btn btn-primary">
-              Ver personas
-            </Link>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link to="/people" className="btn btn-primary">
+                Ver personas
+              </Link>
+              <Link to="/tutorial" className="btn btn-secondary">
+                Ver tutorial
+              </Link>
+            </div>
           </div>
         )}
 

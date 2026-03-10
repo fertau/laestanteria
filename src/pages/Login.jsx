@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
@@ -8,6 +9,7 @@ export default function Login() {
   const { signIn, user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [signingIn, setSigningIn] = useState(false);
 
   // If already logged in with profile, redirect
   if (user && profile) {
@@ -16,6 +18,7 @@ export default function Login() {
   }
 
   const handleSignIn = async () => {
+    setSigningIn(true);
     try {
       const result = await signIn();
       if (result) {
@@ -23,6 +26,7 @@ export default function Login() {
       }
     } catch (err) {
       toast('Error al iniciar sesion: ' + err.message, 'error');
+      setSigningIn(false);
     }
   };
 
@@ -57,8 +61,16 @@ export default function Login() {
         Tu biblioteca entre amigos
       </p>
 
+      {signingIn && (
+        <div className="progress-bar" style={{ marginBottom: 24 }}>
+          <div className="progress-bar-fill" />
+        </div>
+      )}
+
       <button
         onClick={handleSignIn}
+        disabled={signingIn}
+        className="login-btn"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -70,16 +82,9 @@ export default function Login() {
           fontSize: 15,
           fontWeight: 600,
           border: 'none',
-          cursor: 'pointer',
+          cursor: signingIn ? 'wait' : 'pointer',
           transition: 'transform var(--transition), box-shadow var(--transition)',
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.transform = 'translateY(-1px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = 'none';
+          opacity: signingIn ? 0.7 : 1,
         }}
       >
         <svg width="20" height="20" viewBox="0 0 48 48">
