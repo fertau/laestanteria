@@ -12,7 +12,7 @@
   --success: #27ae60;
   --info: #2980b9;
 
-  --font-display: 'Playfair Display', Georgia, serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   --radius: 8px;
