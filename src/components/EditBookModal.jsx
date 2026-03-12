@@ -99,7 +99,7 @@ function sourceLabel(src) {
 }
 
 /* ---- Compact label ---- */
-const labelSt = { display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, fontWeight: 600 };
+const labelSt = { display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 };
 
 /**
  * EditBookModal — Edit all metadata fields of an existing book.
@@ -318,7 +318,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
         border: '1px solid var(--border)',
         width: '100%', maxWidth: 540,
         maxHeight: '90vh', overflowY: 'auto',
-        padding: '20px 24px 24px',
+        padding: '24px',
       }}>
         {/* Header */}
         <div style={{
@@ -490,11 +490,11 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
         {/* ====== FORM PHASE ====== */}
         <form onSubmit={handleSubmit}>
-          {/* Cover + search + title/author — compact top row */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          {/* Cover + Title + Author — top row */}
+          <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
             {/* Cover preview */}
             <div style={{
-              width: 72, height: 108, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
+              width: 80, height: 120, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
               background: 'var(--surface)',
               border: coverUrl ? '2px solid var(--accent)' : '2px dashed var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -529,14 +529,14 @@ export default function EditBookModal({ book, onClose, onSaved }) {
             </div>
 
             {/* Title + Author + Search button */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
                 <label style={labelSt}>Titulo *</label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
-                  style={{ width: '100%', fontSize: 13, padding: '7px 10px' }}
+                  style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
                 />
               </div>
               <div>
@@ -545,7 +545,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                   required
-                  style={{ width: '100%', fontSize: 13, padding: '7px 10px' }}
+                  style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
                 />
               </div>
               {/* Magic wand — outline style, distinct from form actions */}
@@ -555,7 +555,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 disabled={phase === 'searching' || (!title.trim() && !isbn.trim())}
                 style={{
                   width: '100%',
-                  padding: '6px 0',
+                  padding: '8px 0',
                   fontSize: 12,
                   fontWeight: 600,
                   border: '1px dashed var(--accent)',
@@ -579,9 +579,9 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
           {/* Cover options (persist from candidates phase) */}
           {phase === 'form' && coverOptions.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                   {coverOptions.length} portadas:
                 </span>
                 <button
@@ -589,7 +589,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                   onClick={handleGoogleImageSearch}
                   disabled={searchingGI}
                   className="btn btn-ghost"
-                  style={{ fontSize: 10, padding: '1px 6px' }}
+                  style={{ fontSize: 10, padding: '2px 6px' }}
                 >
                   {searchingGI ? '...' : '+ Google Images'}
                 </button>
@@ -604,7 +604,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                       toast('Portada seleccionada', 'success');
                     }}
                     style={{
-                      flexShrink: 0, width: 44, height: 66, padding: 0,
+                      flexShrink: 0, width: 48, height: 72, padding: 0,
                       border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
                       borderRadius: 3, overflow: 'hidden', cursor: 'pointer',
                       background: 'var(--surface)', transition: 'border-color 0.15s',
@@ -622,18 +622,18 @@ export default function EditBookModal({ book, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Genre + Language + ISBN — all in one row */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          {/* Genre + Language + ISBN — one row */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 2 }}>
               <label style={labelSt}>Genero</label>
-              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}>
+              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}>
                 <option value="">—</option>
                 {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelSt}>Idioma</label>
-              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}>
                 {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
@@ -643,43 +643,43 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                 value={isbn}
                 onChange={(e) => setIsbn(e.target.value)}
                 placeholder="978-..."
-                style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}
+                style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
               />
             </div>
           </div>
 
-          {/* Cover URL — small inline input */}
-          <div style={{ marginBottom: 10 }}>
+          {/* Cover URL */}
+          <div style={{ marginBottom: 12 }}>
             <label style={labelSt}>URL portada</label>
             <input
               value={coverUrl}
               onChange={(e) => setCoverUrl(e.target.value)}
               placeholder="Pegar URL de portada..."
-              style={{ width: '100%', fontSize: 11, padding: '6px 8px' }}
+              style={{ width: '100%', fontSize: 12, padding: '8px 10px' }}
             />
           </div>
 
-          {/* Description — compact */}
-          <div style={{ marginBottom: 14 }}>
+          {/* Description */}
+          <div style={{ marginBottom: 16 }}>
             <label style={labelSt}>Descripcion</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              style={{ width: '100%', resize: 'vertical', fontSize: 12, padding: '6px 8px' }}
+              rows={3}
+              style={{ width: '100%', resize: 'vertical', fontSize: 13, padding: '8px 10px' }}
             />
           </div>
 
-          {/* Submit — right-aligned, compact */}
+          {/* Submit */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 14px' }}>
+            <button type="button" onClick={onClose} className="btn btn-ghost" style={{ fontSize: 12, padding: '8px 14px' }}>
               Cancelar
             </button>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={saving || !title.trim() || !author.trim() || phase === 'searching'}
-              style={{ fontSize: 12, padding: '7px 18px' }}
+              style={{ fontSize: 12, padding: '8px 18px' }}
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>

@@ -17,16 +17,19 @@ const GENRES = [
 ];
 
 const LANGUAGES = [
-  { value: 'es', label: 'Espanol' },
-  { value: 'en', label: 'Ingles' },
-  { value: 'pt', label: 'Portugues' },
-  { value: 'fr', label: 'Frances' },
-  { value: 'de', label: 'Aleman' },
-  { value: 'it', label: 'Italiano' },
+  { value: 'es', label: 'ES' },
+  { value: 'en', label: 'EN' },
+  { value: 'pt', label: 'PT' },
+  { value: 'fr', label: 'FR' },
+  { value: 'de', label: 'DE' },
+  { value: 'it', label: 'IT' },
   { value: 'other', label: 'Otro' },
 ];
 
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+
+/* ---- Shared label style (matches EditBookModal) ---- */
+const labelSt = { display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 };
 
 // Simple Levenshtein distance
 function levenshtein(a, b) {
@@ -431,80 +434,33 @@ export default function UploadModal({ onClose }) {
     if (f) validateFile(f);
   };
 
-  // Manual ISBN search
-  const handleISBNSearch = async () => {
-    if (!isbn.trim()) return;
-    setFetchingMeta(true);
-    try {
-      // Search both APIs in parallel
-      const [olResult, gbResult] = await Promise.allSettled([
-        fetchByISBN(isbn),
-        gbISBN(isbn),
-      ]);
-
-      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
-      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
-
-      // Prefer Google Books for cover, merge both
-      const best = gb || ol;
-      if (best) {
-        if (best.title && !title) setTitle(best.title);
-        if (best.author && !author) setAuthor(best.author);
-        if (best.description && !description) setDescription(best.description);
-        if (best.genre) {
-          const mapped = mapGenre(best.genre);
-          if (mapped && !genre) setGenre(mapped);
-        }
-
-        // Cover: validate and prefer the first real cover
-        const coverCandidates = [gb?.coverUrl, ol?.coverUrl].filter(Boolean);
-        if (coverCandidates.length > 0) autoSelectValidCover(coverCandidates, setCoverUrl);
-
-        if (best.language) setLanguage(best.language);
-
-        setMetaSource(best.source);
-        toast('Metadata encontrada!', 'success');
-      } else {
-        toast('No se encontro el ISBN en ninguna base de datos', 'info');
-      }
-    } catch {
-      toast('Error al buscar ISBN', 'error');
-    } finally {
-      setFetchingMeta(false);
+  // Manual unified search (✨ button) — searches by ISBN and/or title+author
+  const handleManualSearch = async () => {
+    if (!title.trim() && !isbn.trim()) {
+      toast('Ingresa un titulo o ISBN primero', 'info');
+      return;
     }
-  };
-
-  // Manual search by title+author
-  const handleTitleSearch = async () => {
-    if (!title.trim()) return;
     setFetchingMeta(true);
     try {
-      const [gbResult, olResult] = await Promise.allSettled([
-        gbSearch(title, author),
-        olSearch(title, author),
-      ]);
-
-      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
-      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
-
-      const best = gb || ol;
-      if (best) {
-        if (best.description && !description) setDescription(best.description);
-        if (best.genre) {
-          const mapped = mapGenre(best.genre);
-          if (mapped && !genre) setGenre(mapped);
-        }
-
-        const coverCandidates = [gb?.coverUrl, ol?.coverUrl].filter(Boolean);
-        if (coverCandidates.length > 0) autoSelectValidCover(coverCandidates, setCoverUrl);
-
-        if (best.isbn && !isbn) setIsbn(best.isbn);
-        if (best.language) setLanguage(best.language);
-
-        setMetaSource(best.source);
+      const result = await enrichMetadata({ title, author, isbn });
+      if (result?.enriched) {
         toast('Metadata encontrada!', 'success');
       } else {
         toast('No se encontraron resultados', 'info');
+      }
+      // Broader cover search if no cover found
+      if (!result?.foundCover && !coverUrl) {
+        const [gbC, olC] = await Promise.allSettled([
+          gbSearchCovers(title, author, isbn),
+          olSearchCovers(title, author, isbn),
+        ]);
+        const allCovers = [
+          ...(gbC.status === 'fulfilled' ? gbC.value : []),
+          ...(olC.status === 'fulfilled' ? olC.value : []),
+        ];
+        if (allCovers.length > 0) {
+          autoSelectValidCover(allCovers.map((c) => c.url), setCoverUrl);
+        }
       }
     } catch {
       toast('Error al buscar metadata', 'error');
@@ -595,24 +551,22 @@ export default function UploadModal({ onClose }) {
         borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
         width: '100%',
-        maxWidth: 520,
+        maxWidth: 540,
         maxHeight: '90vh',
         overflowY: 'auto',
-        padding: 28,
+        padding: '24px',
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 20,
+          marginBottom: 16,
         }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, margin: 0 }}>
             Agregar libro
-            <HelpTip text="El EPUB se guarda en tu navegador. Solo se comparte la metadata (titulo, autor, portada) con otros usuarios." size={16} position="bottom" />
+            <HelpTip text="El EPUB se guarda en tu navegador. Solo se comparte la metadata (titulo, autor, portada) con otros usuarios." size={14} position="bottom" />
           </h2>
-          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
-            X
-          </button>
+          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 16, padding: '2px 6px' }}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -624,10 +578,10 @@ export default function UploadModal({ onClose }) {
             style={{
               border: `2px dashed ${fileError ? 'var(--danger)' : file ? 'var(--success)' : 'var(--border)'}`,
               borderRadius: 'var(--radius)',
-              padding: 24,
+              padding: 18,
               textAlign: 'center',
               cursor: 'pointer',
-              marginBottom: 16,
+              marginBottom: 14,
               transition: 'border-color var(--transition)',
             }}
           >
@@ -781,183 +735,140 @@ export default function UploadModal({ onClose }) {
             </div>
           )}
 
-          {/* Cover preview + metadata side by side */}
-          {previewCover && (
+          {/* Cover + Title + Author — top row (matches EditBookModal) */}
+          <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
+            {/* Cover preview */}
             <div style={{
-              display: 'flex',
-              gap: 16,
-              marginBottom: 16,
-              padding: 12,
+              width: 80, height: 120, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
               background: 'var(--surface)',
-              borderRadius: 'var(--radius)',
+              border: previewCover ? '2px solid var(--accent)' : '2px dashed var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'relative',
             }}>
-              <img
-                src={previewCover}
-                alt="Portada"
-                style={{
-                  width: 80,
-                  height: 120,
-                  objectFit: 'cover',
-                  borderRadius: 4,
-                  flexShrink: 0,
-                }}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {title && (
-                  <div style={{
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 600,
-                    fontSize: 15,
-                    marginBottom: 4,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {title}
-                  </div>
-                )}
-                {author && (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
-                    {author}
-                  </div>
-                )}
-                {isbn && (
-                  <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                    ISBN: {isbn}
-                  </div>
-                )}
-              </div>
+              {previewCover ? (
+                <img
+                  src={previewCover}
+                  alt="Portada"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <span style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center', padding: 4 }}>
+                  Sin portada
+                </span>
+              )}
+              {previewCover && (
+                <button
+                  type="button"
+                  onClick={() => { setCoverUrl(''); setEpubCoverUrl(''); }}
+                  style={{
+                    position: 'absolute', top: 2, right: 2,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.7)', color: '#fff',
+                    fontSize: 10, border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1,
+                  }}
+                  title="Quitar portada"
+                >✕</button>
+              )}
             </div>
-          )}
 
-          {/* ISBN */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              ISBN (opcional — autocompleta metadata)
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={isbn}
-                onChange={(e) => setIsbn(e.target.value)}
-                placeholder="978-..."
-                style={{ flex: 1 }}
-              />
+            {/* Title + Author + ✨ Search */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <label style={labelSt}>Titulo *</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
+                />
+              </div>
+              <div>
+                <label style={labelSt}>Autor *</label>
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  required
+                  style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
+                />
+              </div>
+              {/* Magic wand — same style as EditBookModal */}
               <button
                 type="button"
-                onClick={handleISBNSearch}
-                disabled={fetchingMeta || !isbn.trim()}
-                className="btn btn-secondary"
-                style={{ fontSize: 13 }}
+                onClick={handleManualSearch}
+                disabled={fetchingMeta || (!title.trim() && !isbn.trim())}
+                style={{
+                  width: '100%',
+                  padding: '8px 0',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: '1px dashed var(--accent)',
+                  borderRadius: 'var(--radius)',
+                  background: 'transparent',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  opacity: (fetchingMeta || (!title.trim() && !isbn.trim())) ? 0.4 : 1,
+                  transition: 'all var(--transition)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
               >
-                {fetchingMeta ? '...' : 'Buscar'}
+                <span style={{ fontSize: 14 }}>✨</span>
+                {fetchingMeta ? 'Buscando...' : 'Buscar metadata'}
               </button>
             </div>
           </div>
 
-          {/* Title */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Titulo *
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
+          {/* Genre + Language + ISBN — one row */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <div style={{ flex: 2 }}>
+              <label style={labelSt}>Genero</label>
+              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}>
+                <option value="">—</option>
+                {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelSt}>Idioma *</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}>
+                {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 2 }}>
+              <label style={labelSt}>ISBN</label>
               <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                style={{ flex: 1 }}
+                value={isbn}
+                onChange={(e) => setIsbn(e.target.value)}
+                placeholder="978-..."
+                style={{ width: '100%', fontSize: 13, padding: '8px 10px' }}
               />
-              {title.trim() && !fetchingMeta && (
-                <button
-                  type="button"
-                  onClick={handleTitleSearch}
-                  disabled={fetchingMeta}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
-                  title="Buscar metadata por titulo y autor"
-                >
-                  Buscar metadata
-                </button>
-              )}
             </div>
           </div>
 
-          {/* Author */}
+          {/* Cover URL */}
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Autor *
-            </label>
+            <label style={labelSt}>URL portada</label>
             <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              required
-              style={{ width: '100%' }}
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              placeholder={epubCoverUrl ? 'Se usara la portada del EPUB' : 'Pegar URL de portada...'}
+              style={{ width: '100%', fontSize: 12, padding: '8px 10px' }}
             />
           </div>
 
-          {/* Genre + Language row */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                Genero
-              </label>
-              <select
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                style={{ width: '100%' }}
-              >
-                <option value="">Sin genero</option>
-                {GENRES.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                Idioma *
-              </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {/* Description */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Descripcion
-            </label>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelSt}>Descripcion</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              style={{ width: '100%', resize: 'vertical' }}
+              style={{ width: '100%', resize: 'vertical', fontSize: 13, padding: '8px 10px' }}
             />
-          </div>
-
-          {/* Cover URL */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              URL de la portada
-            </label>
-            <input
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder={epubCoverUrl ? 'Se usara la portada del EPUB' : 'https://...'}
-              style={{ width: '100%' }}
-            />
-            {!previewCover && !coverUrl && (
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
-                Se detectara automaticamente del EPUB o de APIs externas
-              </div>
-            )}
           </div>
 
           {/* Progress bar */}
@@ -980,13 +891,14 @@ export default function UploadModal({ onClose }) {
 
           {/* Submit */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary">
+            <button type="button" onClick={onClose} className="btn btn-ghost" style={{ fontSize: 12, padding: '8px 14px' }}>
               Cancelar
             </button>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={uploading || !file || !title.trim() || !author.trim() || (dupCheck?.type === 'hash' && !dupAction) || fetchingMeta}
+              style={{ fontSize: 12, padding: '8px 18px' }}
             >
               {uploading ? `Guardando... ${progress}%` : 'Agregar libro'}
             </button>
