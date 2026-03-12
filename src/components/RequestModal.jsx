@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRequests } from '../hooks/useRequests';
 import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
@@ -11,6 +11,13 @@ export default function RequestModal({ request, onClose }) {
   const { approveAndSend, rejectBooks } = useRequests();
   const { getKindleEmailFor } = useBonds();
   const { toast } = useToast();
+
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const [selected, setSelected] = useState(
     () => new Set(request.books.filter((b) => b.status === 'pending').map((b) => b.bookId))

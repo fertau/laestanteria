@@ -126,6 +126,13 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   const [coverOptions, setCoverOptions] = useState([]);
   const [searchingGI, setSearchingGI] = useState(false);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Auto-search when opening a book with no cover
   useEffect(() => {
     if ((!book.coverUrl || book.coverUrl.startsWith('blob:')) && (book.title || book.isbn)) {

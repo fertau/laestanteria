@@ -61,6 +61,13 @@ export default function BookModal({ book, onClose }) {
   const isBonded = hasBondWith(activeBook.uploadedBy?.uid);
   const avgRating = activeBook.ratingCount > 0 ? (activeBook.ratingSum / activeBook.ratingCount).toFixed(1) : null;
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // Check if EPUB is available locally
   useEffect(() => {
     if (activeBook.fileHash) {

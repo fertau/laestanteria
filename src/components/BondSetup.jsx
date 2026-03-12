@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
@@ -12,6 +12,13 @@ export default function BondSetup({ targetUser, onClose }) {
   const { profile } = useAuth();
   const { createBond, getBondStatus } = useBonds();
   const { toast } = useToast();
+
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const [kindleEmail, setKindleEmail] = useState(profile?.kindleEmail || '');
   const [sending, setSending] = useState(false);

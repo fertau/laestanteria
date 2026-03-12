@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { collection, query, where, getDocs, updateDoc, doc as docRef } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useBooks } from '../hooks/useBooks';
@@ -81,6 +81,13 @@ export default function UploadModal({ onClose }) {
   const { books, uploadBook } = useBooks();
   const { toast } = useToast();
   const fileRef = useRef(null);
+
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState(null);
