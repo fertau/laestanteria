@@ -126,8 +126,52 @@ export function useBooks() {
     []
   );
 
+  // Group books by bookGroupId for multi-language display.
+  // Books sharing a groupId become one "group card" with language variants.
+  const groupedBooks = useMemo(() => {
+    const groups = new Map(); // groupId → Book[]
+    const ungrouped = [];
+
+    for (const book of allBooks) {
+      if (book.bookGroupId) {
+        if (!groups.has(book.bookGroupId)) groups.set(book.bookGroupId, []);
+        groups.get(book.bookGroupId).push(book);
+      } else {
+        ungrouped.push(book);
+      }
+    }
+
+    const result = [...ungrouped];
+
+    for (const [groupId, variants] of groups) {
+      if (variants.length === 1) {
+        // Solo book in group — treat as ungrouped
+        result.push(variants[0]);
+      } else {
+        // Sort: user's own books first, then by uploadedAt desc
+        variants.sort((a, b) => {
+          const aOwn = a.uploadedBy?.uid === uid ? 1 : 0;
+          const bOwn = b.uploadedBy?.uid === uid ? 1 : 0;
+          if (bOwn !== aOwn) return bOwn - aOwn;
+          return (b.uploadedAt?.seconds || 0) - (a.uploadedAt?.seconds || 0);
+        });
+        const primary = variants[0];
+        result.push({
+          ...primary,
+          _isGroup: true,
+          _groupId: groupId,
+          _variants: variants,
+          _languages: variants.map((v) => v.language).filter(Boolean),
+        });
+      }
+    }
+
+    return result;
+  }, [allBooks, uid]);
+
   return {
     books: allBooks,
+    groupedBooks,
     loading,
     uploadBook,
     updateBook,

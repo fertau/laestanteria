@@ -35,9 +35,15 @@ export default function BookModal({ book, onClose }) {
   const { canDownloadFrom } = useFollows();
   const { hasBondWith } = useBonds();
   const { requestBooks } = useRequests();
-  const { myRating, rate, removeRating } = useRatings(book.id);
-  const { status: readingStatus, setReadingStatus } = useReadingStatus(book.id);
   const { toast } = useToast();
+
+  // Language variant selector for grouped books
+  const [activeVariantIndex, setActiveVariantIndex] = useState(0);
+  const variants = book._isGroup ? book._variants : [book];
+  const activeBook = variants[activeVariantIndex] || variants[0];
+
+  const { myRating, rate, removeRating } = useRatings(activeBook.id);
+  const { status: readingStatus, setReadingStatus } = useReadingStatus(activeBook.id);
 
   const [sendingKindle, setSendingKindle] = useState(false);
   const [requesting, setRequesting] = useState(false);
@@ -50,17 +56,17 @@ export default function BookModal({ book, onClose }) {
   // (prevents close when user scrolls or drags accidentally)
   const mouseDownTarget = useRef(null);
 
-  const isOwner = book.uploadedBy?.uid === user?.uid;
-  const canDownload = canDownloadFrom(book.uploadedBy?.uid);
-  const isBonded = hasBondWith(book.uploadedBy?.uid);
-  const avgRating = book.ratingCount > 0 ? (book.ratingSum / book.ratingCount).toFixed(1) : null;
+  const isOwner = activeBook.uploadedBy?.uid === user?.uid;
+  const canDownload = canDownloadFrom(activeBook.uploadedBy?.uid);
+  const isBonded = hasBondWith(activeBook.uploadedBy?.uid);
+  const avgRating = activeBook.ratingCount > 0 ? (activeBook.ratingSum / activeBook.ratingCount).toFixed(1) : null;
 
   // Check if EPUB is available locally
   useEffect(() => {
-    if (book.fileHash) {
-      hasEpub(book.fileHash).then(setHasLocal);
+    if (activeBook.fileHash) {
+      hasEpub(activeBook.fileHash).then(setHasLocal);
     }
-  }, [book.fileHash]);
+  }, [activeBook.fileHash]);
 
   const handleRate = async (value) => {
     try {
@@ -91,13 +97,13 @@ export default function BookModal({ book, onClose }) {
       toast('Configura tu email Kindle en tu perfil primero', 'info');
       return;
     }
-    if (!book.fileHash) {
+    if (!activeBook.fileHash) {
       toast('Este libro no tiene archivo asociado', 'error');
       return;
     }
     setSendingKindle(true);
     try {
-      const file = await getEpub(book.fileHash);
+      const file = await getEpub(activeBook.fileHash);
       if (!file) {
         toast('Archivo EPUB no encontrado localmente', 'error');
         return;
@@ -109,8 +115,8 @@ export default function BookModal({ book, onClose }) {
       const fn = httpsCallable(functions, 'sendToKindle');
       await fn({
         kindleEmail: user.kindleEmail,
-        bookTitle: book.title,
-        bookAuthor: book.author,
+        bookTitle: activeBook.title,
+        bookAuthor: activeBook.author,
         epubBase64: base64,
       });
       toast('Libro enviado a tu Kindle!', 'success');
@@ -128,11 +134,11 @@ export default function BookModal({ book, onClose }) {
     setRequesting(true);
     try {
       await requestBooks(
-        book.uploadedBy.uid,
-        book.uploadedBy.displayName,
-        [book]
+        activeBook.uploadedBy.uid,
+        activeBook.uploadedBy.displayName,
+        [activeBook]
       );
-      toast(`Pedido enviado a ${book.uploadedBy.displayName}`, 'success');
+      toast(`Pedido enviado a ${activeBook.uploadedBy.displayName}`, 'success');
     } catch {
       toast('Error al enviar pedido', 'error');
     } finally {
@@ -140,15 +146,15 @@ export default function BookModal({ book, onClose }) {
     }
   };
 
-  // Collections for this book
-  const bookCollections = collections.filter((c) => c.bookIds?.includes(book.id));
+  // Collections for this book (uses active variant)
+  const bookCollections = collections.filter((c) => c.bookIds?.includes(activeBook.id));
   const availableCollections = collections.filter(
-    (c) => !c.bookIds?.includes(book.id) && c.createdBy?.uid === user?.uid
+    (c) => !c.bookIds?.includes(activeBook.id) && c.createdBy?.uid === user?.uid
   );
 
   const handleAddToCollection = async (colId) => {
     try {
-      await addBookToCollection(colId, book.id);
+      await addBookToCollection(colId, activeBook.id);
       toast('Agregado a la coleccion', 'success');
     } catch {
       toast('Error al agregar', 'error');
@@ -157,7 +163,7 @@ export default function BookModal({ book, onClose }) {
 
   const handleRemoveFromCollection = async (colId) => {
     try {
-      await removeBookFromCollection(colId, book.id);
+      await removeBookFromCollection(colId, activeBook.id);
       toast('Removido de la coleccion', 'info');
     } catch {
       toast('Error al remover', 'error');
@@ -171,7 +177,7 @@ export default function BookModal({ book, onClose }) {
     }
     setDeleting(true);
     try {
-      await deleteBook(book.id);
+      await deleteBook(activeBook.id);
       toast('Libro eliminado', 'success');
       onClose();
     } catch {
@@ -232,6 +238,38 @@ export default function BookModal({ book, onClose }) {
 
         {/* Content */}
         <div style={{ padding: 24 }}>
+
+          {/* Language variant selector — only for grouped books */}
+          {book._isGroup && variants.length > 1 && (
+            <div style={{
+              display: 'flex',
+              gap: 6,
+              marginBottom: 16,
+            }}>
+              {variants.map((v, i) => (
+                <button
+                  key={v.id}
+                  onClick={() => setActiveVariantIndex(i)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 20,
+                    border: i === activeVariantIndex
+                      ? '2px solid var(--accent)'
+                      : '1px solid var(--border)',
+                    background: i === activeVariantIndex ? 'var(--accent)' : 'var(--surface)',
+                    color: i === activeVariantIndex ? '#fff' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {langLabels[v.language] || v.language || 'Sin idioma'}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div style={{
             display: 'flex',
             gap: 20,
@@ -247,10 +285,10 @@ export default function BookModal({ book, onClose }) {
               background: 'var(--surface)',
               flexShrink: 0,
             }}>
-              {book.coverUrl ? (
+              {activeBook.coverUrl ? (
                 <img
-                  src={book.coverUrl}
-                  alt={book.title}
+                  src={activeBook.coverUrl}
+                  alt={activeBook.title}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
@@ -266,10 +304,10 @@ export default function BookModal({ book, onClose }) {
                   background: 'linear-gradient(135deg, #1a1510 0%, #0f0c08 100%)',
                 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>
-                    {book.title}
+                    {activeBook.title}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {book.author}
+                    {activeBook.author}
                   </div>
                 </div>
               )}
@@ -283,24 +321,24 @@ export default function BookModal({ book, onClose }) {
                 lineHeight: 1.3,
                 marginBottom: 4,
               }}>
-                {book.title}
+                {activeBook.title}
               </h3>
               <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 12 }}>
-                {book.author}
+                {activeBook.author}
               </div>
 
               {/* Meta badges */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {book.language && (
+                {activeBook.language && (
                   <span style={badgeStyle}>
-                    {langLabels[book.language] || book.language}
+                    {langLabels[activeBook.language] || activeBook.language}
                   </span>
                 )}
-                {book.genre && (
-                  <span style={badgeStyle}>{book.genre}</span>
+                {activeBook.genre && (
+                  <span style={badgeStyle}>{activeBook.genre}</span>
                 )}
-                {book.isbn && (
-                  <span style={badgeStyle}>ISBN: {book.isbn}</span>
+                {activeBook.isbn && (
+                  <span style={badgeStyle}>ISBN: {activeBook.isbn}</span>
                 )}
               </div>
 
@@ -311,7 +349,7 @@ export default function BookModal({ book, onClose }) {
                     <Stars value={parseFloat(avgRating)} readOnly size={16} />
                     <span style={{ fontSize: 14, color: 'var(--accent)' }}>{avgRating}</span>
                     <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                      ({book.ratingCount} {book.ratingCount === 1 ? 'voto' : 'votos'})
+                      ({activeBook.ratingCount} {activeBook.ratingCount === 1 ? 'voto' : 'votos'})
                     </span>
                   </>
                 ) : (
@@ -321,14 +359,14 @@ export default function BookModal({ book, onClose }) {
 
               {/* Uploader */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                <Avatar src={null} name={book.uploadedBy?.displayName} size={20} />
-                <span>Agregado por {book.uploadedBy?.displayName}</span>
+                <Avatar src={null} name={activeBook.uploadedBy?.displayName} size={20} />
+                <span>Agregado por {activeBook.uploadedBy?.displayName}</span>
               </div>
             </div>
           </div>
 
           {/* Description */}
-          {book.description && (
+          {activeBook.description && (
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>
                 Descripcion
@@ -339,7 +377,7 @@ export default function BookModal({ book, onClose }) {
                 color: 'var(--text)',
                 whiteSpace: 'pre-wrap',
               }}>
-                {book.description}
+                {activeBook.description}
               </p>
             </div>
           )}
@@ -511,7 +549,7 @@ export default function BookModal({ book, onClose }) {
 
       {showEdit && (
         <EditBookModal
-          book={book}
+          book={activeBook}
           onClose={() => setShowEdit(false)}
           onSaved={onClose}
         />

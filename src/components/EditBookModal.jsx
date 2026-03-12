@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
-import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olCovers } from '../lib/openLibrary';
-import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbCovers } from '../lib/googleBooks';
+import { searchCandidates, buildDiffFromCandidate } from '../lib/batchQueue';
+import { searchCovers as gbCovers } from '../lib/googleBooks';
+import { searchCovers as olCovers } from '../lib/openLibrary';
 import { searchCovers as hcCovers } from '../lib/hardcover';
 import { searchCovers as giCovers } from '../lib/googleImageSearch';
+import { isValidCover } from '../lib/coverUtils';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -24,21 +27,22 @@ const LANGUAGES = [
 
 /**
  * Normalize a book title from API results:
- * - Remove common noise: "(Spanish Edition)", "[Lingua spagnola]", etc.
+ * - Remove common noise: "(Spanish Edition)", "[Lingua spagnola]", ISBNs, library tags
  * - Fix ALL CAPS → Title Case (but preserve short words like "de", "el", "y")
- * - Collapse extra whitespace
  */
 function normalizeTitle(raw) {
   if (!raw) return '';
-  // Strip common edition/language tags (parenthesized or bracketed)
   let t = raw
+    .replace(/[\[\(]?\b97[89][-\s]?\d[-\s]?\d{2}[-\s]?\d{5}[-\s]?\d[-\s]?[\dX]\b[\]\)]?/gi, '')
+    .replace(/[\[\(]\s*(?:18|19|20)\d{2}\s*[\]\)]/g, '')
+    .replace(/\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|ebook|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi, '')
     .replace(/[\(\[]\s*(Spanish|English|French|Portuguese|German|Italian)\s*(Edition|Ed\.?)?\s*[\)\]]/gi, '')
     .replace(/[\(\[]\s*(Edici[oó]n\s*(en\s*)?(espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\)\]]/gi, '')
     .replace(/[\(\[]\s*Lingua\s+\w+\s*[\)\]]/gi, '')
-    .replace(/\s*:\s*$/, '') // trailing colon left after stripping
+    .replace(/[\[\(]\s*[\]\)]/g, '')
+    .replace(/\s*:\s*$/, '')
     .trim();
 
-  // Fix ALL CAPS (3+ uppercase words in a row = likely all-caps title)
   const words = t.split(/\s+/);
   const uppercaseCount = words.filter((w) => w.length > 1 && w === w.toUpperCase()).length;
   if (uppercaseCount >= 2 && uppercaseCount >= words.length * 0.6) {
@@ -81,17 +85,28 @@ function mapGenre(genreStr) {
   return '';
 }
 
+/** Source badge color mapping */
+const SOURCE_COLORS = {
+  google: { color: '#4285F4', bg: 'rgba(66,133,244,0.1)' },
+  hardcover: { color: '#E8590C', bg: 'rgba(232,89,12,0.1)' },
+  openlibrary: { color: '#e44f26', bg: 'rgba(228,79,38,0.1)' },
+};
+
+function sourceLabel(src) {
+  if (src === 'google') return 'Google';
+  if (src === 'hardcover') return 'Hardcover';
+  return 'OpenLib';
+}
+
 /**
  * EditBookModal — Edit all metadata fields of an existing book.
- * Opens on top of BookModal (z-index 1001).
- * Supports ISBN and title+author search from Google Books / Open Library / Hardcover.
- * Includes visual cover picker with multiple options from APIs + manual URL input.
+ * Single "magic wand" button searches all APIs and shows Plex-style candidates.
  */
 export default function EditBookModal({ book, onClose, onSaved }) {
   const { updateBook } = useBooks();
   const { toast } = useToast();
 
-  // Pre-fill with current book values
+  // Form fields — pre-filled with current book values
   const [title, setTitle] = useState(book.title || '');
   const [author, setAuthor] = useState(book.author || '');
   const [genre, setGenre] = useState(book.genre || '');
@@ -99,234 +114,126 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   const [description, setDescription] = useState(book.description || '');
   const [coverUrl, setCoverUrl] = useState(book.coverUrl || '');
   const [isbn, setIsbn] = useState(book.isbn || '');
-
   const [saving, setSaving] = useState(false);
-  const [fetchingMeta, setFetchingMeta] = useState(false);
 
-  // Cover search state
+  // Phase: 'form' | 'searching' | 'candidates'
+  const [phase, setPhase] = useState('form');
+  const [candidates, setCandidates] = useState([]);
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(-1);
   const [coverOptions, setCoverOptions] = useState([]);
-  const [searchingCovers, setSearchingCovers] = useState(false);
   const [searchingGI, setSearchingGI] = useState(false);
 
-
-  // Auto-search covers when opening a book with no cover (or blob: cover)
+  // Auto-search when opening a book with no cover
   useEffect(() => {
     if ((!book.coverUrl || book.coverUrl.startsWith('blob:')) && (book.title || book.isbn)) {
-      // Small delay to let the modal render first
-      const timer = setTimeout(() => {
-        doSearchCovers(book.title || '', book.author || '', book.isbn || '', book.language || 'es');
-      }, 300);
+      const timer = setTimeout(() => handleMagicSearch(true), 300);
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Search covers from multiple sources ---
-  const doSearchCovers = async (searchTitle, searchAuthor, searchIsbn, lang = 'es') => {
-    if (!searchTitle && !searchIsbn) return;
-    setSearchingCovers(true);
+  // --- Single unified search: candidates + covers ---
+  const handleMagicSearch = async (autoMode = false) => {
+    const searchTitle = title.trim();
+    const searchAuthor = author.trim();
+    const searchIsbn = isbn.trim();
+    if (!searchTitle && !searchIsbn) {
+      if (!autoMode) toast('Ingresa un titulo o ISBN primero', 'info');
+      return;
+    }
+
+    setPhase('searching');
+    setCandidates([]);
     setCoverOptions([]);
+    setSelectedCandidateIndex(-1);
+
     try {
-      const [gbResults, olResults, hcResults] = await Promise.allSettled([
-        gbCovers(searchTitle, searchAuthor, searchIsbn, lang),
-        olCovers(searchTitle, searchAuthor, searchIsbn, lang),
+      // Search candidates + covers in parallel
+      const [candidateResult, gbC, olC, hcC] = await Promise.allSettled([
+        searchCandidates(searchTitle, searchAuthor, searchIsbn),
+        gbCovers(searchTitle, searchAuthor, searchIsbn, language),
+        olCovers(searchTitle, searchAuthor, searchIsbn, language),
         hcCovers(searchTitle, searchAuthor, searchIsbn),
       ]);
 
-      const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
-      const ol = olResults.status === 'fulfilled' ? olResults.value : [];
-      const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
+      const cands = candidateResult.status === 'fulfilled' ? candidateResult.value : [];
+      setCandidates(cands);
 
-      const all = [...gb, ...ol, ...hc];
+      // Merge covers
+      const allCovers = [
+        ...(gbC.status === 'fulfilled' ? gbC.value : []),
+        ...(olC.status === 'fulfilled' ? olC.value : []),
+        ...(hcC.status === 'fulfilled' ? hcC.value : []),
+      ];
       const seen = new Set();
-      const unique = all.filter((c) => {
+      const unique = allCovers.filter((c) => {
         if (seen.has(c.url)) return false;
         seen.add(c.url);
         return true;
       });
-
       setCoverOptions(unique);
 
-      // Auto-select first cover if current one is empty/blob
-      if (unique.length > 0 && (!coverUrl || coverUrl.startsWith('blob:'))) {
-        setCoverUrl(unique[0].url);
-      }
-
-      if (unique.length === 0) {
-        toast('No se encontraron portadas', 'info');
-      }
-    } catch {
-      // Silently fail
-    } finally {
-      setSearchingCovers(false);
-    }
-  };
-
-  const handleSearchCovers = async () => {
-    if (!title.trim() && !isbn.trim()) {
-      toast('Ingresa un titulo o ISBN primero', 'info');
-      return;
-    }
-    setSearchingCovers(true);
-    setCoverOptions([]);
-    try {
-      const [gbResults, olResults, hcResults] = await Promise.allSettled([
-        gbCovers(title, author, isbn, language),
-        olCovers(title, author, isbn, language),
-        hcCovers(title, author, isbn),
-      ]);
-
-      const gb = gbResults.status === 'fulfilled' ? gbResults.value : [];
-      const ol = olResults.status === 'fulfilled' ? olResults.value : [];
-      const hc = hcResults.status === 'fulfilled' ? hcResults.value : [];
-
-      // Merge and deduplicate
-      const all = [...gb, ...ol, ...hc];
-      const seen = new Set();
-      const unique = all.filter((c) => {
-        if (seen.has(c.url)) return false;
-        seen.add(c.url);
-        return true;
-      });
-
-      setCoverOptions(unique);
-      if (unique.length === 0) {
-        toast('No se encontraron portadas', 'info');
-      }
-    } catch {
-      toast('Error al buscar portadas', 'error');
-    } finally {
-      setSearchingCovers(false);
-    }
-  };
-
-  // --- Search by ISBN (metadata + covers in parallel) ---
-  const handleISBNSearch = async () => {
-    if (!isbn.trim()) return;
-    setFetchingMeta(true);
-    setSearchingCovers(true);
-    setCoverOptions([]);
-    try {
-      // Search metadata AND covers in parallel for speed
-      const [olResult, gbResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
-        fetchByISBN(isbn),
-        gbISBN(isbn),
-        gbCovers(title, author, isbn, language),
-        olCovers(title, author, isbn, language),
-        hcCovers(title, author, isbn),
-      ]);
-
-      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
-      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
-
-      // Apply metadata
-      const best = gb || ol;
-      if (best) {
-        if (best.title) setTitle(normalizeTitle(best.title));
-        if (best.author) setAuthor(normalizeTitle(best.author));
-        if (best.description) setDescription(best.description);
-        if (best.genre) {
-          const mapped = mapGenre(best.genre);
-          if (mapped) setGenre(mapped);
+      // In auto mode: auto-apply the best candidate silently
+      if (autoMode && cands.length > 0) {
+        const best = cands[0];
+        // Only auto-fill cover if current is empty
+        if (best.coverUrl && (!coverUrl || coverUrl.startsWith('blob:'))) {
+          // Validate before setting
+          const coverCandidates = [best.coverUrl, ...unique.map((c) => c.url)].filter(Boolean);
+          for (const url of coverCandidates) {
+            if (await isValidCover(url)) {
+              setCoverUrl(url);
+              break;
+            }
+          }
         }
-        if (best.language) setLanguage(best.language);
+        setPhase('form');
+        return;
       }
 
-      // Merge cover results
-      const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
-      const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
-      const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC];
-      const seen = new Set();
-      const unique = all.filter((c) => {
-        if (seen.has(c.url)) return false;
-        seen.add(c.url);
-        return true;
-      });
-      setCoverOptions(unique);
-
-      // Auto-select best cover (prefer metadata cover, then first from search)
-      const bestCover = gb?.coverUrl || ol?.coverUrl || (unique.length > 0 ? unique[0].url : '');
-      if (bestCover) setCoverUrl(bestCover);
-
-      if (best || unique.length > 0) {
-        toast('Metadata encontrada!', 'success');
+      if (cands.length > 0) {
+        setSelectedCandidateIndex(0);
+        setPhase('candidates');
+      } else if (unique.length > 0) {
+        // No metadata candidates but found covers
+        setPhase('candidates');
+        toast('No se encontraron candidatos, pero hay portadas disponibles', 'info');
       } else {
-        toast('No se encontro el ISBN en ninguna base de datos', 'info');
-      }
-    } catch {
-      toast('Error al buscar ISBN', 'error');
-    } finally {
-      setFetchingMeta(false);
-      setSearchingCovers(false);
-    }
-  };
-
-  // --- Search by title+author (metadata + covers in parallel) ---
-  const handleTitleSearch = async () => {
-    if (!title.trim()) return;
-    setFetchingMeta(true);
-    setSearchingCovers(true);
-    setCoverOptions([]);
-    try {
-      const [gbResult, olResult, gbCoverResult, olCoverResult, hcCoverResult] = await Promise.allSettled([
-        gbSearch(title, author, language),
-        olSearch(title, author, language),
-        gbCovers(title, author, isbn, language),
-        olCovers(title, author, isbn, language),
-        hcCovers(title, author, isbn),
-      ]);
-
-      const gb = gbResult.status === 'fulfilled' ? gbResult.value : null;
-      const ol = olResult.status === 'fulfilled' ? olResult.value : null;
-
-      // Apply metadata
-      const best = gb || ol;
-      if (best) {
-        if (best.description) setDescription(best.description);
-        if (best.genre) {
-          const mapped = mapGenre(best.genre);
-          if (mapped) setGenre(mapped);
-        }
-        if (best.isbn) setIsbn(best.isbn);
-        if (best.language) setLanguage(best.language);
-      }
-
-      // Merge cover results
-      const gbC = gbCoverResult.status === 'fulfilled' ? gbCoverResult.value : [];
-      const olC = olCoverResult.status === 'fulfilled' ? olCoverResult.value : [];
-      const hcC = hcCoverResult.status === 'fulfilled' ? hcCoverResult.value : [];
-      const all = [...gbC, ...olC, ...hcC];
-      const seen = new Set();
-      const unique = all.filter((c) => {
-        if (seen.has(c.url)) return false;
-        seen.add(c.url);
-        return true;
-      });
-      setCoverOptions(unique);
-
-      // Auto-select best cover
-      const bestCover = gb?.coverUrl || ol?.coverUrl || (unique.length > 0 ? unique[0].url : '');
-      if (bestCover) setCoverUrl(bestCover);
-
-      if (best || unique.length > 0) {
-        toast('Metadata encontrada!', 'success');
-      } else {
+        setPhase('form');
         toast('No se encontraron resultados', 'info');
       }
     } catch {
-      toast('Error al buscar metadata', 'error');
-    } finally {
-      setFetchingMeta(false);
-      setSearchingCovers(false);
+      setPhase('form');
+      toast('Error al buscar', 'error');
     }
   };
 
-  // --- Magic wand: Google Image Search (manual, appends to existing results) ---
-  const handleGoogleImageSearch = async () => {
-    if (!title.trim() && !isbn.trim()) {
-      toast('Ingresa un titulo o ISBN primero', 'info');
+  // --- Apply selected candidate to form ---
+  const applyCandidate = () => {
+    if (selectedCandidateIndex < 0 || selectedCandidateIndex >= candidates.length) {
+      setPhase('form');
       return;
     }
+    const cand = candidates[selectedCandidateIndex];
+
+    // Apply metadata
+    if (cand.title) setTitle(normalizeTitle(cand.title));
+    if (cand.author) setAuthor(normalizeTitle(cand.author));
+    if (cand.description) setDescription(cand.description);
+    if (cand.genre) {
+      const mapped = mapGenre(cand.genre);
+      if (mapped) setGenre(mapped);
+    }
+    if (cand.isbn) setIsbn(cand.isbn);
+    if (cand.language) setLanguage(cand.language);
+    if (cand.coverUrl) setCoverUrl(cand.coverUrl);
+
+    toast('Metadata aplicada — revisa y guarda', 'success');
+    setPhase('form');
+  };
+
+  // --- Google Image Search (secondary, appends covers) ---
+  const handleGoogleImageSearch = async () => {
+    if (!title.trim() && !isbn.trim()) return;
     setSearchingGI(true);
     try {
       const results = await giCovers(title, author, isbn, language);
@@ -334,15 +241,14 @@ export default function EditBookModal({ book, onClose, onSaved }) {
         toast('Google Images no encontro portadas', 'info');
         return;
       }
-      // Append to existing coverOptions, deduplicating
       setCoverOptions((prev) => {
         const seen = new Set(prev.map((c) => c.url));
         const newCovers = results.filter((c) => !seen.has(c.url));
         if (newCovers.length === 0) {
-          toast('No hay portadas nuevas de Google Images', 'info');
+          toast('No hay portadas nuevas', 'info');
           return prev;
         }
-        toast(`${newCovers.length} portadas nuevas de Google Images`, 'success');
+        toast(`${newCovers.length} portadas nuevas`, 'success');
         return [...prev, ...newCovers];
       });
     } catch {
@@ -359,9 +265,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
     setSaving(true);
     try {
-      // Never save blob: URLs
       const safeCover = coverUrl.trim().startsWith('blob:') ? '' : coverUrl.trim();
-
       await updateBook(book.id, {
         title: title.trim(),
         author: author.trim(),
@@ -381,19 +285,24 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     }
   };
 
-  return (
+  // --- Render ---
+  return createPortal(
     <div
       className="modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          if (phase === 'candidates') setPhase('form');
+          else onClose();
+        }
+        e.stopPropagation();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
       style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1001,
+        position: 'fixed', inset: 0, zIndex: 1001,
         background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
       }}
     >
@@ -401,73 +310,192 @@ export default function EditBookModal({ book, onClose, onSaved }) {
         background: 'var(--bg)',
         borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
-        width: '100%',
-        maxWidth: 520,
-        maxHeight: '90vh',
-        overflowY: 'auto',
+        width: '100%', maxWidth: 520,
+        maxHeight: '90vh', overflowY: 'auto',
         padding: 28,
       }}>
         {/* Header */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           marginBottom: 20,
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
             Editar libro
           </h2>
-          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
-            X
-          </button>
+          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>X</button>
         </div>
 
-        {/* Fetching indicator */}
-        {fetchingMeta && (
+        {/* Searching overlay */}
+        {phase === 'searching' && (
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginBottom: 16,
-            padding: '10px 14px',
-            background: 'var(--surface)',
-            borderRadius: 'var(--radius)',
-            fontSize: 13,
-            color: 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', gap: 10,
+            marginBottom: 16, padding: '12px 14px',
+            background: 'var(--surface)', borderRadius: 'var(--radius)',
+            fontSize: 13, color: 'var(--text-muted)',
           }}>
             <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-            Buscando metadata...
+            Buscando en Google Books, Open Library y Hardcover...
           </div>
         )}
 
+        {/* ====== CANDIDATES PHASE ====== */}
+        {phase === 'candidates' && (
+          <div style={{ marginBottom: 20 }}>
+            {/* Candidate strip */}
+            {candidates.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {candidates.length} candidatos — selecciona el correcto:
+                </div>
+                <div style={{
+                  display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6,
+                }}>
+                  {candidates.map((cand, ci) => (
+                    <button
+                      key={ci}
+                      type="button"
+                      onClick={() => setSelectedCandidateIndex(ci)}
+                      style={{
+                        flexShrink: 0, width: 120, padding: 8,
+                        border: selectedCandidateIndex === ci
+                          ? '2px solid var(--accent)' : '1px solid var(--border)',
+                        borderRadius: 'var(--radius)',
+                        background: selectedCandidateIndex === ci
+                          ? 'rgba(193,123,63,0.08)' : 'var(--bg)',
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <div style={{
+                        width: '100%', height: 80, borderRadius: 4,
+                        overflow: 'hidden', background: 'var(--surface)', marginBottom: 6,
+                      }}>
+                        {cand.coverUrl ? (
+                          <img
+                            src={cand.coverUrl} alt=""
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div style={{
+                            width: '100%', height: '100%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 9, color: 'var(--text-dim)',
+                          }}>sin portada</div>
+                        )}
+                      </div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 600,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        color: 'var(--text)',
+                      }}>
+                        {cand.title || '(sin titulo)'}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: 'var(--text-muted)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {cand.author || '(sin autor)'}
+                      </div>
+                      <span style={{
+                        display: 'inline-block', fontSize: 9, fontWeight: 700,
+                        color: (SOURCE_COLORS[cand.source] || SOURCE_COLORS.openlibrary).color,
+                        background: (SOURCE_COLORS[cand.source] || SOURCE_COLORS.openlibrary).bg,
+                        padding: '1px 5px', borderRadius: 3, marginTop: 4,
+                      }}>
+                        {sourceLabel(cand.source)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cover gallery */}
+            {coverOptions.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  marginBottom: 6,
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {coverOptions.length} portadas — click para seleccionar:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleGoogleImageSearch}
+                    disabled={searchingGI}
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: '2px 8px' }}
+                  >
+                    {searchingGI ? '...' : '✨ Google Images'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }}>
+                  {coverOptions.map((opt, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setCoverUrl(opt.url);
+                        toast('Portada seleccionada', 'success');
+                      }}
+                      style={{
+                        flexShrink: 0, width: 60, height: 90, padding: 0,
+                        border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
+                        borderRadius: 4, overflow: 'hidden', cursor: 'pointer',
+                        background: 'var(--surface)', transition: 'border-color 0.15s',
+                      }}
+                      title={`${opt.label} (${opt.source})`}
+                    >
+                      <img
+                        src={opt.url} alt={opt.label}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Candidate action buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={applyCandidate}
+                className="btn btn-primary"
+                disabled={selectedCandidateIndex < 0}
+                style={{ flex: 1 }}
+              >
+                Aplicar y editar
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhase('form')}
+                className="btn btn-secondary"
+              >
+                Cancelar busqueda
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ====== FORM PHASE ====== */}
         <form onSubmit={handleSubmit}>
-          {/* Cover section */}
+          {/* Cover + Magic Wand row */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Portada
-            </label>
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              alignItems: 'flex-start',
-            }}>
-              {/* Current cover preview */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              {/* Cover preview */}
               <div style={{
-                width: 80,
-                height: 120,
-                borderRadius: 4,
-                overflow: 'hidden',
-                flexShrink: 0,
+                width: 80, height: 120, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
                 background: 'var(--surface)',
                 border: coverUrl ? '2px solid var(--accent)' : '2px dashed var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {coverUrl && !coverUrl.startsWith('blob:') ? (
                   <img
-                    src={coverUrl}
-                    alt="Portada actual"
+                    src={coverUrl} alt="Portada"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
@@ -477,28 +505,18 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                   </span>
                 )}
               </div>
+
+              {/* Magic wand + cover URL */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={handleSearchCovers}
-                    disabled={searchingCovers || (!title.trim() && !isbn.trim())}
-                    className="btn btn-primary"
-                    style={{ fontSize: 12, flex: 1 }}
-                  >
-                    {searchingCovers ? 'Buscando...' : 'Buscar portada'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleGoogleImageSearch}
-                    disabled={searchingGI || searchingCovers || (!title.trim() && !isbn.trim())}
-                    className="btn btn-secondary"
-                    style={{ fontSize: 14, padding: '4px 10px' }}
-                    title="Buscar portadas en Google Images"
-                  >
-                    {searchingGI ? '...' : '✨'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleMagicSearch(false)}
+                  disabled={phase === 'searching' || (!title.trim() && !isbn.trim())}
+                  className="btn btn-primary"
+                  style={{ fontSize: 13, width: '100%' }}
+                >
+                  {phase === 'searching' ? 'Buscando...' : '✨ Buscar libro'}
+                </button>
                 {coverUrl && (
                   <button
                     type="button"
@@ -518,32 +536,13 @@ export default function EditBookModal({ book, onClose, onSaved }) {
               </div>
             </div>
 
-            {/* Cover search results grid */}
-            {searchingCovers && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 12,
-                fontSize: 12,
-                color: 'var(--text-muted)',
-              }}>
-                <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                Buscando en Google Books, Open Library y Hardcover...
-              </div>
-            )}
-
-            {coverOptions.length > 0 && (
+            {/* Cover options (persist from candidates phase) */}
+            {phase === 'form' && coverOptions.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                  {coverOptions.length} portadas encontradas — hacele click para seleccionar:
+                  {coverOptions.length} portadas disponibles:
                 </div>
-                <div style={{
-                  display: 'flex',
-                  gap: 8,
-                  overflowX: 'auto',
-                  paddingBottom: 8,
-                }}>
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }}>
                   {coverOptions.map((opt, i) => (
                     <button
                       key={i}
@@ -553,22 +552,15 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                         toast('Portada seleccionada', 'success');
                       }}
                       style={{
-                        flexShrink: 0,
-                        width: 60,
-                        height: 90,
-                        padding: 0,
+                        flexShrink: 0, width: 60, height: 90, padding: 0,
                         border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
-                        borderRadius: 4,
-                        overflow: 'hidden',
-                        cursor: 'pointer',
-                        background: 'var(--surface)',
-                        transition: 'border-color 0.15s',
+                        borderRadius: 4, overflow: 'hidden', cursor: 'pointer',
+                        background: 'var(--surface)', transition: 'border-color 0.15s',
                       }}
                       title={`${opt.label} (${opt.source})`}
                     >
                       <img
-                        src={opt.url}
-                        alt={opt.label}
+                        src={opt.url} alt={opt.label}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={(e) => { e.target.parentElement.style.display = 'none'; }}
                       />
@@ -579,55 +571,17 @@ export default function EditBookModal({ book, onClose, onSaved }) {
             )}
           </div>
 
-          {/* ISBN */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              ISBN
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={isbn}
-                onChange={(e) => setIsbn(e.target.value)}
-                placeholder="978-..."
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                onClick={handleISBNSearch}
-                disabled={fetchingMeta || !isbn.trim()}
-                className="btn btn-secondary"
-                style={{ fontSize: 13 }}
-              >
-                {fetchingMeta ? '...' : 'Buscar'}
-              </button>
-            </div>
-          </div>
-
           {/* Title */}
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               Titulo *
             </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                style={{ flex: 1 }}
-              />
-              {title.trim() && !fetchingMeta && (
-                <button
-                  type="button"
-                  onClick={handleTitleSearch}
-                  disabled={fetchingMeta}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
-                  title="Buscar metadata por titulo y autor"
-                >
-                  Buscar metadata
-                </button>
-              )}
-            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              style={{ width: '100%' }}
+            />
           </div>
 
           {/* Author */}
@@ -649,32 +603,32 @@ export default function EditBookModal({ book, onClose, onSaved }) {
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
                 Genero
               </label>
-              <select
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                style={{ width: '100%' }}
-              >
+              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%' }}>
                 <option value="">Sin genero</option>
-                {GENRES.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
+                {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
                 Idioma *
               </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%' }}>
+                {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* ISBN */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+              ISBN
+            </label>
+            <input
+              value={isbn}
+              onChange={(e) => setIsbn(e.target.value)}
+              placeholder="978-..."
+              style={{ width: '100%' }}
+            />
           </div>
 
           {/* Description */}
@@ -698,13 +652,14 @@ export default function EditBookModal({ book, onClose, onSaved }) {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={saving || !title.trim() || !author.trim() || fetchingMeta}
+              disabled={saving || !title.trim() || !author.trim() || phase === 'searching'}
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

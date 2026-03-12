@@ -58,7 +58,7 @@ function completenessScore(candidate) {
  * @param {string} isbn
  * @returns {Promise<Array<object>>}
  */
-async function searchCandidates(title, author, isbn) {
+export async function searchCandidates(title, author, isbn) {
   const [gbResults, olResults, hcResults] = await Promise.allSettled([
     gbSearchMultiple(title, author, isbn),
     olSearchMultiple(title, author, isbn),

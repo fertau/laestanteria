@@ -8,6 +8,7 @@ import { parseFilename } from '../lib/parseFilename';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from '../lib/openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from '../lib/googleBooks';
 import HelpTip from './HelpTip';
+import { isValidCover } from '../lib/coverUtils';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -56,6 +57,24 @@ function similarity(a, b) {
   const maxLen = Math.max(la.length, lb.length);
   if (maxLen === 0) return 1;
   return 1 - levenshtein(la, lb) / maxLen;
+}
+
+/**
+ * Validate cover URLs and auto-select the first real one (not a placeholder).
+ * Runs asynchronously — sets the cover as soon as a valid one is found.
+ */
+async function autoSelectValidCover(urls, setCoverUrl) {
+  for (const url of urls) {
+    if (!url) continue;
+    if (await isValidCover(url)) {
+      setCoverUrl(url);
+      return;
+    }
+  }
+  // If no cover passes validation, use the first one anyway (better than nothing)
+  if (urls.length > 0 && urls[0]) {
+    setCoverUrl(urls[0]);
+  }
 }
 
 export default function UploadModal({ onClose }) {
@@ -127,6 +146,7 @@ export default function UploadModal({ onClose }) {
     // Priority: what's already set > Google Books > Open Library
     let enriched = false;
     let foundCover = false;
+    const coverCandidates = [];
 
     for (const result of apiResults) {
       if (!title && result.title) {
@@ -141,16 +161,9 @@ export default function UploadModal({ onClose }) {
         setDescription(result.description);
         enriched = true;
       }
-      if (!coverUrl && !epubCoverUrl && result.coverUrl) {
-        setCoverUrl(result.coverUrl);
-        enriched = true;
-        foundCover = true;
-      }
-      // Prefer API cover over EPUB cover (usually higher quality)
-      if (epubCoverUrl && !coverUrl && !foundCover && result.coverUrl) {
-        setCoverUrl(result.coverUrl);
-        enriched = true;
-        foundCover = true;
+      // Collect cover candidates (validated later)
+      if (result.coverUrl && !foundCover) {
+        coverCandidates.push(result.coverUrl);
       }
       if (!genre && result.genre) {
         // Try to map to our genre list
@@ -171,6 +184,13 @@ export default function UploadModal({ onClose }) {
           enriched = true;
         }
       }
+    }
+
+    // Auto-select the first valid cover from candidates
+    if (coverCandidates.length > 0 && !coverUrl) {
+      foundCover = true;
+      enriched = true;
+      autoSelectValidCover(coverCandidates, setCoverUrl);
     }
 
     // Track which source provided the most data
@@ -319,7 +339,7 @@ export default function UploadModal({ onClose }) {
               ...(olC.status === 'fulfilled' ? olC.value : []),
             ];
             if (allCovers.length > 0) {
-              setCoverUrl(allCovers[0].url);
+              autoSelectValidCover(allCovers.map((c) => c.url), setCoverUrl);
             }
           } catch {
             // Silently fail
@@ -345,7 +365,7 @@ export default function UploadModal({ onClose }) {
                 ...(olC.status === 'fulfilled' ? olC.value : []),
               ];
               if (allCovers.length > 0) {
-                setCoverUrl(allCovers[0].url);
+                autoSelectValidCover(allCovers.map((c) => c.url), setCoverUrl);
               }
             } catch {
               // Silently fail
@@ -429,9 +449,9 @@ export default function UploadModal({ onClose }) {
           if (mapped && !genre) setGenre(mapped);
         }
 
-        // Cover: prefer Google Books (higher quality), fall back to Open Library
-        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
-        if (bestCover) setCoverUrl(bestCover);
+        // Cover: validate and prefer the first real cover
+        const coverCandidates = [gb?.coverUrl, ol?.coverUrl].filter(Boolean);
+        if (coverCandidates.length > 0) autoSelectValidCover(coverCandidates, setCoverUrl);
 
         if (best.language) setLanguage(best.language);
 
@@ -468,8 +488,8 @@ export default function UploadModal({ onClose }) {
           if (mapped && !genre) setGenre(mapped);
         }
 
-        const bestCover = gb?.coverUrl || ol?.coverUrl || '';
-        if (bestCover) setCoverUrl(bestCover);
+        const coverCandidates = [gb?.coverUrl, ol?.coverUrl].filter(Boolean);
+        if (coverCandidates.length > 0) autoSelectValidCover(coverCandidates, setCoverUrl);
 
         if (best.isbn && !isbn) setIsbn(best.isbn);
         if (best.language) setLanguage(best.language);

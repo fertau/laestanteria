@@ -43,21 +43,68 @@ function isbn10to13(isbn10) {
  * - Strip subtitle after : or —
  * - Remove edition markers like [2nd Ed.], (Edición revisada)
  * - Remove format tags like (Kindle), (ebook), (PDF)
+ * - Remove embedded ISBNs, years, library tags, author names
  */
 function normalizeTitle(title) {
   if (!title) return '';
   let t = title;
+
+  // Remove ISBNs (13 or 10 digit) anywhere in the title
+  t = t.replace(/[\[\(]?\b97[89][-\s]?\d[-\s]?\d{2}[-\s]?\d{5}[-\s]?\d[-\s]?[\dX]\b[\]\)]?/gi, '');
+  t = t.replace(/[\[\(]?\b\d{9}[\dX]\b[\]\)]?/gi, '');
+
+  // Remove years in brackets/parens: (2003), [1999]
+  t = t.replace(/[\[\(]\s*(?:18|19|20)\d{2}\s*[\]\)]/g, '');
+
+  // Remove library/tool/source tags: [calibre 3.0], (z-lib.org), [EPUB], (Kindle), [PDF], etc.
+  t = t.replace(/\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|ebook|paperback|hardcover|tapa (?:dura|blanda)|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi, '');
+
+  // Remove language/edition tags: (Spanish Edition), [Lingua spagnola], (Edición en español)
+  t = t.replace(/[\(\[]\s*(Spanish|English|French|Portuguese|German|Italian)\s*(Edition|Ed\.?)?\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*(Edici[oó]n\s*(en\s*)?(espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*Lingua\s+\w+\s*[\)\]]/gi, '');
+
   // Strip subtitle after : or — or –
   t = t.split(/\s*[:\u2014\u2013]\s*/)[0];
+
   // Remove bracketed/parenthesized edition markers
-  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad|spanish|english|kindle|ebook|pdf|epub)[\])]/gi, '');
+  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad)[\])]/gi, '');
+
   // Remove trailing parenthesized format info
   t = t.replace(/\s*\((?:kindle|ebook|pdf|epub|paperback|hardcover|tapa dura|tapa blanda)\)\s*$/gi, '');
+
+  // Remove empty brackets/parens and clean up
+  t = t.replace(/[\[\(]\s*[\]\)]/g, '');
+  t = t.replace(/\s*[-–—]\s*$/, '');
+  t = t.replace(/^\s*[-–—]\s*/, '');
+  t = t.replace(/\s{2,}/g, ' ');
   return t.trim();
 }
 
 /**
+ * Pick the best item from a Google Books result set.
+ * Prefers items that have cover images (more imageLinks variants = higher confidence).
+ * Falls back to first item if none have covers (still useful for metadata).
+ */
+function pickBestItem(items) {
+  if (!items?.length) return null;
+  let best = null;
+  let bestScore = -1;
+  for (const item of items) {
+    const links = item.volumeInfo?.imageLinks;
+    const score = links ? Object.keys(links).length : 0;
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+  return normalizeVolume(best || items[0]);
+}
+
+/**
  * Search Google Books by title and author.
+ * Uses progressive fallback: structured → plain → no lang restriction.
+ * Prefers results with actual cover images over those without.
  * @param {string} title
  * @param {string} author
  * @returns {Promise<object|null>} Normalized metadata or null
@@ -66,6 +113,7 @@ export async function searchByTitleAuthor(title, author, lang = '') {
   if (!title) return null;
 
   const cleanTitle = normalizeTitle(title);
+  if (!cleanTitle) return null;
   const langParam = lang ? `&langRestrict=${lang}` : '';
 
   // Try structured query first (more precise)
@@ -73,19 +121,45 @@ export async function searchByTitleAuthor(title, author, lang = '') {
   if (author) q += `+inauthor:${author}`;
 
   try {
-    let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=3${langParam}`);
+    let res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5${langParam}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.items?.length) return normalizeVolume(data.items[0]);
+      if (data.items?.length) return pickBestItem(data.items);
     }
 
-    // Fallback: plain-text query (much more forgiving for non-exact titles/authors)
+    // Fallback 1: plain-text query (much more forgiving for non-exact titles/authors)
     const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
-    res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=3${langParam}`);
-    if (!res.ok) return null;
-    const data2 = await res.json();
-    if (!data2.items?.length) return null;
-    return normalizeVolume(data2.items[0]);
+    res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5${langParam}`);
+    if (res.ok) {
+      const data2 = await res.json();
+      if (data2.items?.length) return pickBestItem(data2.items);
+    }
+
+    // Fallback 2: retry WITHOUT lang restriction (book may be cataloged in a different language)
+    if (langParam) {
+      res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5`);
+      if (res.ok) {
+        const data3 = await res.json();
+        if (data3.items?.length) return pickBestItem(data3.items);
+      }
+
+      res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5`);
+      if (res.ok) {
+        const data4 = await res.json();
+        if (data4.items?.length) return pickBestItem(data4.items);
+      }
+    }
+
+    // Fallback 3: title-only search (author might be wrong or too specific)
+    if (author && cleanTitle.length >= 4) {
+      res = await fetch(`${BASE}?q=intitle:${encodeURIComponent(cleanTitle)}&maxResults=5`);
+      if (res.ok) {
+        const data5 = await res.json();
+        if (data5.items?.length) return pickBestItem(data5.items);
+      }
+    }
+
+    return null;
   } catch (err) {
     console.warn('Google Books search failed:', err);
     return null;
@@ -102,19 +176,19 @@ export async function searchByISBN(isbn) {
   if (!clean) return null;
 
   try {
-    const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=1`);
+    const res = await fetch(`${BASE}?q=isbn:${clean}&maxResults=3`);
     if (res.ok) {
       const data = await res.json();
-      if (data.items?.length) return normalizeVolume(data.items[0]);
+      if (data.items?.length) return pickBestItem(data.items);
     }
 
     // Try converted ISBN (13→10 or 10→13) if original didn't find anything
     const converted = clean.length === 13 ? isbn13to10(clean) : isbn10to13(clean);
     if (converted) {
-      const res2 = await fetch(`${BASE}?q=isbn:${converted}&maxResults=1`);
+      const res2 = await fetch(`${BASE}?q=isbn:${converted}&maxResults=3`);
       if (res2.ok) {
         const data2 = await res2.json();
-        if (data2.items?.length) return normalizeVolume(data2.items[0]);
+        if (data2.items?.length) return pickBestItem(data2.items);
       }
     }
 
@@ -208,7 +282,7 @@ export async function searchCovers(title, author, isbn, lang = '') {
       }
     }
 
-    // Search by title+author — try structured query first, then plain-text fallback
+    // Search by title+author — try structured query first, then fallbacks
     if (cleanTitle) {
       let q = `intitle:${cleanTitle}`;
       if (author) q += `+inauthor:${author}`;
@@ -221,10 +295,22 @@ export async function searchCovers(title, author, isbn, lang = '') {
         }
       }
 
-      // Fallback: plain-text query (finds books intitle: misses)
+      // Fallback 1: plain-text query (finds books intitle: misses)
       if (covers.length === 0) {
         const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
         res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=8${langParam}`);
+        if (res.ok) {
+          const data = await res.json();
+          for (const item of (data.items || [])) {
+            const cover = extractCover(item);
+            if (cover) addCover(cover, item.volumeInfo?.title || '');
+          }
+        }
+      }
+
+      // Fallback 2: retry without lang restriction if still no covers
+      if (covers.length === 0 && langParam) {
+        res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=8`);
         if (res.ok) {
           const data = await res.json();
           for (const item of (data.items || [])) {
@@ -317,6 +403,17 @@ export async function searchMultiple(title, author, isbn, lang = '') {
     if (candidates.length < 3 && cleanTitle) {
       const plainQ = author ? `${cleanTitle} ${author}` : cleanTitle;
       const res = await fetch(`${BASE}?q=${encodeURIComponent(plainQ)}&maxResults=5${langParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const item of (data.items || [])) addCandidate(item, 'title');
+      }
+    }
+
+    // 4. Retry without lang restriction if still few results
+    if (candidates.length < 3 && langParam && cleanTitle) {
+      let q = `intitle:${cleanTitle}`;
+      if (author) q += `+inauthor:${author}`;
+      const res = await fetch(`${BASE}?q=${encodeURIComponent(q)}&maxResults=5`);
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items || [])) addCandidate(item, 'title');

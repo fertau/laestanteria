@@ -81,10 +81,27 @@ export function parseFilename(filename) {
 
   // --- 5. Final cleanup ---
   // Remove any remaining brackets content that looks like metadata tags
-  // e.g., "[calibre 3.0]", "[EPUB]", "(z-lib.org)"
-  const metaTags = /\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi;
+  // e.g., "[calibre 3.0]", "[EPUB]", "(z-lib.org)", "(Spanish Edition)"
+  const metaTags = /\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|ebook|paperback|hardcover|tapa (?:dura|blanda)|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi;
   title = title.replace(metaTags, '').trim();
   author = author.replace(metaTags, '').trim();
+
+  // Remove language/edition tags from title and author
+  const editionTags = /\s*[\[\(]\s*(?:Spanish|English|French|Portuguese|German|Italian)\s*(?:Edition|Ed\.?)?\s*[\]\)]/gi;
+  title = title.replace(editionTags, '').trim();
+  author = author.replace(editionTags, '').trim();
+
+  const edicionTags = /\s*[\[\(]\s*(?:Edici[oó]n\s*(?:en\s*)?(?:espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\]\)]/gi;
+  title = title.replace(edicionTags, '').trim();
+  author = author.replace(edicionTags, '').trim();
+
+  // Remove "Lingua X" tags
+  title = title.replace(/\s*[\[\(]\s*Lingua\s+\w+\s*[\]\)]/gi, '').trim();
+  author = author.replace(/\s*[\[\(]\s*Lingua\s+\w+\s*[\]\)]/gi, '').trim();
+
+  // Clean up empty brackets and trailing separators
+  title = title.replace(/[\[\(]\s*[\]\)]/g, '').replace(/\s*[-–—]\s*$/, '').replace(/\s{2,}/g, ' ').trim();
+  author = author.replace(/[\[\(]\s*[\]\)]/g, '').replace(/\s*[-–—]\s*$/, '').replace(/\s{2,}/g, ' ').trim();
 
   return { title, author, isbn, year };
 }

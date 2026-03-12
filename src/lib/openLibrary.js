@@ -12,15 +12,40 @@ const OL_LANG_MAP = {
 
 /**
  * Normalize a title for better search results:
+ * - Remove ISBNs, years, library tags embedded in the title
  * - Strip subtitle after : or — or –
  * - Remove edition markers and format tags
  */
 function normalizeTitle(title) {
   if (!title) return '';
   let t = title;
+
+  // Remove ISBNs (13 or 10 digit)
+  t = t.replace(/[\[\(]?\b97[89][-\s]?\d[-\s]?\d{2}[-\s]?\d{5}[-\s]?\d[-\s]?[\dX]\b[\]\)]?/gi, '');
+  t = t.replace(/[\[\(]?\b\d{9}[\dX]\b[\]\)]?/gi, '');
+
+  // Remove years in brackets/parens
+  t = t.replace(/[\[\(]\s*(?:18|19|20)\d{2}\s*[\]\)]/g, '');
+
+  // Remove library/tool/source tags
+  t = t.replace(/\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|ebook|paperback|hardcover|tapa (?:dura|blanda)|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi, '');
+
+  // Remove language/edition tags
+  t = t.replace(/[\(\[]\s*(Spanish|English|French|Portuguese|German|Italian)\s*(Edition|Ed\.?)?\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*(Edici[oó]n\s*(en\s*)?(espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*Lingua\s+\w+\s*[\)\]]/gi, '');
+
+  // Strip subtitle after : or — or –
   t = t.split(/\s*[:\u2014\u2013]\s*/)[0];
-  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad|spanish|english|kindle|ebook|pdf|epub)[\])]/gi, '');
+
+  // Remove edition markers
+  t = t.replace(/\s*[\[(][^\])]*(?:ed\.?|edition|edici[oó]n|revisad)[\])]/gi, '');
   t = t.replace(/\s*\((?:kindle|ebook|pdf|epub|paperback|hardcover|tapa dura|tapa blanda)\)\s*$/gi, '');
+
+  // Clean up
+  t = t.replace(/[\[\(]\s*[\]\)]/g, '');
+  t = t.replace(/\s*[-–—]\s*$/, '').replace(/^\s*[-–—]\s*/, '');
+  t = t.replace(/\s{2,}/g, ' ');
   return t.trim();
 }
 
@@ -71,10 +96,11 @@ export async function searchByTitleAuthor(title, author, lang = '') {
   if (!title) return null;
 
   const cleanTitle = normalizeTitle(title);
+  if (!cleanTitle) return null;
   const olLang = OL_LANG_MAP[lang] || '';
 
   // Try structured title+author search first
-  const params = new URLSearchParams({ limit: '3' });
+  const params = new URLSearchParams({ limit: '5' });
   params.set('title', cleanTitle);
   if (author) params.set('author', author);
   if (olLang) params.set('language', olLang);
@@ -83,17 +109,42 @@ export async function searchByTitleAuthor(title, author, lang = '') {
     let res = await fetch(`https://openlibrary.org/search.json?${params}`);
     let data = await res.json();
 
-    // Fallback: generic ?q= search (much more forgiving)
+    // Fallback 1: generic ?q= search (much more forgiving)
     if (!data.docs?.length) {
       const q = author ? `${cleanTitle} ${author}` : cleanTitle;
       const fallbackLang = olLang ? `&language=${olLang}` : '';
-      res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=3${fallbackLang}`);
+      res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=5${fallbackLang}`);
+      data = await res.json();
+    }
+
+    // Fallback 2: retry without language restriction (book may be cataloged differently)
+    if (!data.docs?.length && olLang) {
+      const paramsNoLang = new URLSearchParams({ limit: '5' });
+      paramsNoLang.set('title', cleanTitle);
+      if (author) paramsNoLang.set('author', author);
+      res = await fetch(`https://openlibrary.org/search.json?${paramsNoLang}`);
+      data = await res.json();
+
+      if (!data.docs?.length) {
+        const q = author ? `${cleanTitle} ${author}` : cleanTitle;
+        res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=5`);
+        data = await res.json();
+      }
+    }
+
+    // Fallback 3: title-only search (author might be garbled or wrong)
+    if (!data.docs?.length && author && cleanTitle.length >= 4) {
+      const paramsTitle = new URLSearchParams({ limit: '5' });
+      paramsTitle.set('title', cleanTitle);
+      res = await fetch(`https://openlibrary.org/search.json?${paramsTitle}`);
       data = await res.json();
     }
 
     if (!data.docs?.length) return null;
 
-    return normalizeSearchDoc(data.docs[0]);
+    // Prefer docs with cover images over those without
+    const docWithCover = data.docs.find((d) => d.cover_i) || data.docs[0];
+    return normalizeSearchDoc(docWithCover);
   } catch (err) {
     console.warn('Open Library search failed:', err);
     return null;
@@ -277,7 +328,7 @@ export async function searchCovers(title, author, isbn, lang = '') {
         }
       }
 
-      // Fallback: generic ?q= search if title+author found nothing
+      // Fallback 1: generic ?q= search if title+author found nothing
       if (covers.length === 0) {
         const q = author ? `${cleanTitle} ${author}` : cleanTitle;
         const langSuffix = olLang ? `&language=${olLang}` : '';
@@ -285,6 +336,25 @@ export async function searchCovers(title, author, isbn, lang = '') {
         if (res2.ok) {
           const data2 = await res2.json();
           for (const doc of (data2.docs || [])) {
+            if (doc.cover_i) {
+              addCover(
+                `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+                doc.title || ''
+              );
+            }
+          }
+        }
+      }
+
+      // Fallback 2: retry without language restriction
+      if (covers.length === 0 && olLang) {
+        const paramsNoLang = new URLSearchParams({ limit: '10', fields: 'title,cover_i,author_name' });
+        paramsNoLang.set('title', cleanTitle);
+        if (author) paramsNoLang.set('author', author);
+        const res3 = await fetch(`https://openlibrary.org/search.json?${paramsNoLang}`);
+        if (res3.ok) {
+          const data3 = await res3.json();
+          for (const doc of (data3.docs || [])) {
             if (doc.cover_i) {
               addCover(
                 `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,

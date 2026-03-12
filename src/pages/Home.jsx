@@ -11,22 +11,22 @@ import Avatar from '../components/Avatar';
 
 export default function Home() {
   const { profile } = useAuth();
-  const { books, loading: booksLoading, hasFollows } = useBooks();
+  const { books, groupedBooks, loading: booksLoading, hasFollows } = useBooks();
   const { activities, loading: actLoading } = useActivity(15);
   const { following } = useFollows();
 
   const [selectedBook, setSelectedBook] = useState(null);
 
-  // Recent books (last 8)
+  // Recent books (last 8) — uses groupedBooks to avoid duplicate cards
   const recentBooks = useMemo(() => {
-    return [...books]
+    return [...groupedBooks]
       .sort((a, b) => (b.uploadedAt?.seconds || 0) - (a.uploadedAt?.seconds || 0))
       .slice(0, 8);
-  }, [books]);
+  }, [groupedBooks]);
 
   // Top rated books (min 1 rating, sorted by avg)
   const topRated = useMemo(() => {
-    return [...books]
+    return [...groupedBooks]
       .filter((b) => b.ratingCount > 0)
       .sort((a, b) => {
         const avgA = a.ratingSum / a.ratingCount;
@@ -34,14 +34,14 @@ export default function Home() {
         return avgB - avgA;
       })
       .slice(0, 8);
-  }, [books]);
+  }, [groupedBooks]);
 
-  // Catalog preview (6 random-ish books sorted by title)
+  // Catalog preview (6 books sorted by title)
   const catalogPreview = useMemo(() => {
-    return [...books]
+    return [...groupedBooks]
       .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
       .slice(0, 6);
-  }, [books]);
+  }, [groupedBooks]);
 
   // Stats
   const totalBooks = books.length;

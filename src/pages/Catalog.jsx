@@ -34,7 +34,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function Catalog() {
-  const { books, loading, hasFollows, deleteBooks } = useBooks();
+  const { books, groupedBooks, loading, hasFollows, deleteBooks } = useBooks();
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -54,27 +54,36 @@ export default function Catalog() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const filtered = useMemo(() => {
-    let result = [...books];
+    let result = [...groupedBooks];
 
-    // Search
+    // Search — for grouped books, match if any variant matches
     if (search.trim()) {
       const q = search.toLowerCase().trim();
-      result = result.filter(
-        (b) =>
-          b.title.toLowerCase().includes(q) ||
-          b.author.toLowerCase().includes(q) ||
-          (b.description || '').toLowerCase().includes(q)
-      );
+      result = result.filter((b) => {
+        const all = b._isGroup ? b._variants : [b];
+        return all.some(
+          (v) =>
+            v.title.toLowerCase().includes(q) ||
+            v.author.toLowerCase().includes(q) ||
+            (v.description || '').toLowerCase().includes(q)
+        );
+      });
     }
 
     // Genre
     if (genreFilter) {
-      result = result.filter((b) => b.genre === genreFilter);
+      result = result.filter((b) => {
+        const all = b._isGroup ? b._variants : [b];
+        return all.some((v) => v.genre === genreFilter);
+      });
     }
 
-    // Language
+    // Language — for grouped books, match if any variant has the language
     if (langFilter) {
-      result = result.filter((b) => b.language === langFilter);
+      result = result.filter((b) => {
+        if (b._isGroup) return b._languages.includes(langFilter);
+        return b.language === langFilter;
+      });
     }
 
     // Sort
@@ -100,7 +109,7 @@ export default function Catalog() {
     }
 
     return result;
-  }, [books, search, genreFilter, langFilter, sortBy]);
+  }, [groupedBooks, search, genreFilter, langFilter, sortBy]);
 
   // --- Selection derived values ---
   const selectableIds = useMemo(

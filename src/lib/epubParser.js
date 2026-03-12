@@ -122,8 +122,11 @@ export async function parseEpub(file) {
   };
   const mappedLanguage = langMap[language.toLowerCase()] || '';
 
+  // 7. Clean title: some EPUBs embed author, ISBN, year, tags in the dc:title
+  const cleanedTitle = cleanEpubTitle(title, author);
+
   return {
-    title,
+    title: cleanedTitle,
     author,
     isbn,
     description: cleanHtml(description),
@@ -132,6 +135,55 @@ export async function parseEpub(file) {
     subjects,
     coverObjectUrl,
   };
+}
+
+/**
+ * Clean an EPUB title that may contain embedded metadata.
+ * Some poorly tagged EPUBs put everything in dc:title, e.g.:
+ *   "Gabriel García Márquez - Cien años de soledad (2003) [978-0307474728]"
+ *   "Cien años de soledad (Spanish Edition) [calibre 5.0]"
+ *
+ * @param {string} title - Raw title from OPF
+ * @param {string} author - Author from OPF (used to detect author embedded in title)
+ * @returns {string} Cleaned title
+ */
+function cleanEpubTitle(title, author) {
+  if (!title) return '';
+  let t = title;
+
+  // Remove ISBNs
+  t = t.replace(/[\[\(]?\b97[89][-\s]?\d[-\s]?\d{2}[-\s]?\d{5}[-\s]?\d[-\s]?[\dX]\b[\]\)]?/gi, '');
+  t = t.replace(/[\[\(]?\b\d{9}[\dX]\b[\]\)]?/gi, '');
+
+  // Remove years in brackets/parens
+  t = t.replace(/[\[\(]\s*(?:18|19|20)\d{2}\s*[\]\)]/g, '');
+
+  // Remove library/tool tags
+  t = t.replace(/\s*[\[\(](?:calibre|z-?lib|epub|mobi|pdf|kindle|ebook|paperback|hardcover|tapa (?:dura|blanda)|v?\d+\.\d+|www\.[^\]]+)[^\]\)]*[\]\)]/gi, '');
+
+  // Remove language/edition tags
+  t = t.replace(/[\(\[]\s*(Spanish|English|French|Portuguese|German|Italian)\s*(Edition|Ed\.?)?\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*(Edici[oó]n\s*(en\s*)?(espa[nñ]ol|ingl[eé]s|franc[eé]s|portugu[eé]s|alem[aá]n|italiano))\s*[\)\]]/gi, '');
+  t = t.replace(/[\(\[]\s*Lingua\s+\w+\s*[\)\]]/gi, '');
+
+  // If author is embedded at the start of the title ("Author - Title"), remove it
+  if (author && t.includes(' - ')) {
+    const parts = t.split(/\s+[-–—]\s+/);
+    if (parts.length >= 2) {
+      // Check if the first part matches the author (fuzzy)
+      const firstPart = parts[0].trim().toLowerCase();
+      const authorLower = author.toLowerCase();
+      if (firstPart === authorLower || authorLower.includes(firstPart) || firstPart.includes(authorLower)) {
+        t = parts.slice(1).join(' - ');
+      }
+    }
+  }
+
+  // Clean up empty brackets, trailing separators, extra whitespace
+  t = t.replace(/[\[\(]\s*[\]\)]/g, '');
+  t = t.replace(/\s*[-–—]\s*$/, '').replace(/^\s*[-–—]\s*/, '');
+  t = t.replace(/\s{2,}/g, ' ');
+  return t.trim();
 }
 
 /**

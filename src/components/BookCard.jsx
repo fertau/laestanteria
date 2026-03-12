@@ -81,8 +81,29 @@ export default function BookCard({
           </div>
         )}
 
-        {/* Language badge — top-left */}
-        {book.language && (
+        {/* Language badge(s) — top-left */}
+        {book._isGroup && book._languages?.length > 1 ? (
+          <div style={{
+            position: 'absolute',
+            top: 6,
+            left: 6,
+            display: 'flex',
+            gap: 3,
+          }}>
+            {book._languages.map((lang) => (
+              <span key={lang} style={{
+                background: 'rgba(0,0,0,0.7)',
+                color: 'var(--text-muted)',
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 5px',
+                borderRadius: 3,
+              }}>
+                {langLabels[lang] || lang.toUpperCase()}
+              </span>
+            ))}
+          </div>
+        ) : book.language ? (
           <span style={{
             position: 'absolute',
             top: 6,
@@ -96,7 +117,7 @@ export default function BookCard({
           }}>
             {langLabels[book.language] || book.language.toUpperCase()}
           </span>
-        )}
+        ) : null}
 
         {/* Selection checkbox — top-right */}
         {selectionMode && isSelectable && (
