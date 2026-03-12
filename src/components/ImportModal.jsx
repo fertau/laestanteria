@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { detectCalibreStructure } from '../lib/calibreParser';
 import { buildQueue, processQueueItem } from '../lib/importQueue';
-import { getOrCreateFolder } from '../lib/googleDrive';
+import HelpTip from './HelpTip';
 
 /**
  * ImportModal — Bulk import with 4 phases:
@@ -13,13 +13,11 @@ import { getOrCreateFolder } from '../lib/googleDrive';
  *   3. Processing: sequential upload with progress
  *   4. Done: summary of results
  *
- * IMPORTANT: Token + folder are fetched ONCE before the loop starts
- * (triggered by user click on "Comenzar importación") to avoid
- * per-book signInWithPopup calls that browsers block in async loops.
+ * EPUBs are saved locally (OPFS/IndexedDB) and metadata to Firestore.
  */
 export default function ImportModal({ onClose }) {
   const { books } = useBooks();
-  const { getAccessToken, user, profile } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
   const [phase, setPhase] = useState('select'); // select | review | processing | done
@@ -113,35 +111,12 @@ export default function ImportModal({ onClose }) {
   // --- Processing ---
 
   const startProcessing = async () => {
-    // Pre-fetch Drive token + folder ONCE (user-click context → popup allowed)
-    let accessToken;
-    try {
-      accessToken = await getAccessToken();
-    } catch (err) {
-      toast('Error al obtener acceso a Drive: ' + err.message, 'error');
-      return;
-    }
-    if (!accessToken) {
-      toast('No se pudo obtener acceso a Google Drive. Volvé a iniciar sesión.', 'error');
-      return;
-    }
-
-    let folderId;
-    try {
-      folderId = await getOrCreateFolder(accessToken);
-    } catch (err) {
-      toast('Error al acceder a la carpeta de Drive: ' + err.message, 'error');
-      return;
-    }
-
     setPhase('processing');
     cancelledRef.current = false;
     setCurrentIndex(0);
 
     const context = {
       books,
-      accessToken,
-      folderId,
       uid: user?.uid,
       profile,
     };
@@ -240,8 +215,8 @@ export default function ImportModal({ onClose }) {
           marginBottom: 20,
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
-            {phase === 'done' ? 'Importación completa' :
-              phase === 'processing' ? 'Importando...' : 'Importar libros'}
+            {phase === 'done' ? 'Importacion completa' :
+              phase === 'processing' ? 'Importando...' : <>Importar libros <HelpTip text="Selecciona multiples EPUBs o una carpeta de Calibre. Los archivos se guardan en tu navegador, nunca en la nube." size={16} position="bottom" /></>}
           </h2>
           {phase !== 'processing' && (
             <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
@@ -386,7 +361,7 @@ export default function ImportModal({ onClose }) {
                   Cancelar
                 </button>
                 <button className="btn btn-primary" onClick={startProcessing}>
-                  Comenzar importación
+                  Comenzar importacion
                 </button>
               </div>
             )}
@@ -514,7 +489,7 @@ export default function ImportModal({ onClose }) {
                 onClick={handleCancel}
                 disabled={cancelledRef.current}
               >
-                {cancelledRef.current ? 'Cancelando...' : 'Cancelar importación'}
+                {cancelledRef.current ? 'Cancelando...' : 'Cancelar importacion'}
               </button>
             </div>
           </div>

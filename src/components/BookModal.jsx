@@ -1,16 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../hooks/useAuth';
 import { useBooks } from '../hooks/useBooks';
 import { useCollections } from '../hooks/useCollections';
 import { useFollows } from '../hooks/useFollows';
+import { useBonds } from '../hooks/useBonds';
+import { useRequests } from '../hooks/useRequests';
 import { useRatings } from '../hooks/useRatings';
 import { useReadingStatus } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import { functions } from '../lib/firebase';
-import { shareWithServiceAccount } from '../lib/googleDrive';
+import { getEpub, hasEpub } from '../lib/localStore';
 import Stars from './Stars';
 import Avatar from './Avatar';
+import HelpTip from './HelpTip';
 import EditBookModal from './EditBookModal';
 
 const langLabels = {
@@ -30,15 +33,18 @@ export default function BookModal({ book, onClose }) {
   const { deleteBook } = useBooks();
   const { collections, addBookToCollection, removeBookFromCollection } = useCollections();
   const { canDownloadFrom } = useFollows();
+  const { hasBondWith } = useBonds();
+  const { requestBooks } = useRequests();
   const { myRating, rate, removeRating } = useRatings(book.id);
   const { status: readingStatus, setReadingStatus } = useReadingStatus(book.id);
   const { toast } = useToast();
 
-  const [downloading, setDownloading] = useState(false);
   const [sendingKindle, setSendingKindle] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [hasLocal, setHasLocal] = useState(false);
 
   // Click-outside protection: only close if mousedown AND mouseup both hit the overlay
   // (prevents close when user scrolls or drags accidentally)
@@ -46,7 +52,15 @@ export default function BookModal({ book, onClose }) {
 
   const isOwner = book.uploadedBy?.uid === user?.uid;
   const canDownload = canDownloadFrom(book.uploadedBy?.uid);
+  const isBonded = hasBondWith(book.uploadedBy?.uid);
   const avgRating = book.ratingCount > 0 ? (book.ratingSum / book.ratingCount).toFixed(1) : null;
+
+  // Check if EPUB is available locally
+  useEffect(() => {
+    if (book.fileHash) {
+      hasEpub(book.fileHash).then(setHasLocal);
+    }
+  }, [book.fileHash]);
 
   const handleRate = async (value) => {
     try {
@@ -71,44 +85,34 @@ export default function BookModal({ book, onClose }) {
     }
   };
 
-  // Ensure the Drive file is shared with the service account before Cloud Functions access it
-  const ensureDriveSharing = async () => {
-    const saEmail = import.meta.env.VITE_SERVICE_ACCOUNT_EMAIL;
-    if (!saEmail || !book.driveFileId) return;
-    try {
-      const accessToken = await getAccessToken();
-      if (accessToken) {
-        await shareWithServiceAccount(accessToken, book.driveFileId, saEmail);
-      }
-    } catch {
-      // Sharing may already exist (409) — safe to ignore
-    }
-  };
-
-  const handleDownload = async () => {
-    setDownloading(true);
-    try {
-      await ensureDriveSharing();
-      const fn = httpsCallable(functions, 'generateDownloadLink');
-      const { data } = await fn({ bookId: book.id });
-      window.open(data.downloadUrl, '_blank');
-    } catch {
-      toast('Error al generar link de descarga', 'error');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleSendToKindle = async () => {
-    if (!profile?.kindleEmail) {
+  // Send own book to own Kindle (book is local)
+  const handleSendToMyKindle = async () => {
+    if (!user.kindleEmail) {
       toast('Configura tu email Kindle en tu perfil primero', 'info');
+      return;
+    }
+    if (!book.fileHash) {
+      toast('Este libro no tiene archivo asociado', 'error');
       return;
     }
     setSendingKindle(true);
     try {
-      await ensureDriveSharing();
+      const file = await getEpub(book.fileHash);
+      if (!file) {
+        toast('Archivo EPUB no encontrado localmente', 'error');
+        return;
+      }
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
       const fn = httpsCallable(functions, 'sendToKindle');
-      await fn({ bookId: book.id });
+      await fn({
+        kindleEmail: user.kindleEmail,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        epubBase64: base64,
+      });
       toast('Libro enviado a tu Kindle!', 'success');
     } catch (err) {
       const msg = err?.message || err?.details || 'Error desconocido';
@@ -116,6 +120,23 @@ export default function BookModal({ book, onClose }) {
       toast(`Error al enviar a Kindle: ${msg}`, 'error');
     } finally {
       setSendingKindle(false);
+    }
+  };
+
+  // Request book to be sent to my Kindle (book belongs to someone else)
+  const handleRequestToKindle = async () => {
+    setRequesting(true);
+    try {
+      await requestBooks(
+        book.uploadedBy.uid,
+        book.uploadedBy.displayName,
+        [book]
+      );
+      toast(`Pedido enviado a ${book.uploadedBy.displayName}`, 'success');
+    } catch {
+      toast('Error al enviar pedido', 'error');
+    } finally {
+      setRequesting(false);
     }
   };
 
@@ -301,7 +322,7 @@ export default function BookModal({ book, onClose }) {
               {/* Uploader */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
                 <Avatar src={null} name={book.uploadedBy?.displayName} size={20} />
-                <span>Subido por {book.uploadedBy?.displayName}</span>
+                <span>Agregado por {book.uploadedBy?.displayName}</span>
               </div>
             </div>
           </div>
@@ -417,30 +438,50 @@ export default function BookModal({ book, onClose }) {
           {/* Actions */}
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {canDownload && (
-                <>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleDownload}
-                    disabled={downloading}
-                    style={{ fontSize: 13 }}
-                  >
-                    {downloading ? 'Descargando...' : 'Descargar EPUB'}
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={handleSendToKindle}
-                    disabled={sendingKindle}
-                    style={{ fontSize: 13 }}
-                  >
-                    {sendingKindle ? 'Enviando...' : 'Enviar a Kindle'}
-                  </button>
-                </>
+              {/* Owner actions: send to own Kindle + edit/delete */}
+              {isOwner && hasLocal && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSendToMyKindle}
+                  disabled={sendingKindle}
+                  style={{ fontSize: 13 }}
+                >
+                  {sendingKindle ? 'Enviando...' : 'Enviar a mi Kindle'}
+                  <HelpTip text="Envia el EPUB desde tu navegador directo a tu Kindle via email. El archivo nunca se almacena en la nube." size={13} />
+                </button>
               )}
 
-              {!canDownload && !isOwner && (
+              {/* Bonded user: request to their Kindle */}
+              {!isOwner && isBonded && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleRequestToKindle}
+                  disabled={requesting}
+                  style={{ fontSize: 13 }}
+                >
+                  {requesting ? 'Enviando pedido...' : 'Pedir a mi Kindle'}
+                  <HelpTip text="Le envias un pedido al dueno del libro. Cuando lo apruebe, el libro se envia directo a tu Kindle." size={13} />
+                </button>
+              )}
+
+              {/* Legacy follow with library access: also allow requesting */}
+              {!isOwner && !isBonded && canDownload && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleRequestToKindle}
+                  disabled={requesting}
+                  style={{ fontSize: 13 }}
+                >
+                  {requesting ? 'Enviando pedido...' : 'Pedir a mi Kindle'}
+                  <HelpTip text="Le envias un pedido al dueno del libro. Cuando lo apruebe, el libro se envia directo a tu Kindle." size={13} />
+                </button>
+              )}
+
+              {/* No access */}
+              {!isOwner && !isBonded && !canDownload && (
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
-                  Necesitas acceso de biblioteca para descargar este libro.
+                  Necesitas un vinculo activo para pedir este libro.
+                  <HelpTip text="Para pedir libros, primero crea un vinculo con esta persona desde la seccion Personas. Ambos deben compartir su email @kindle.com." />
                 </div>
               )}
 

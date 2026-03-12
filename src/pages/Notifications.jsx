@@ -1,10 +1,15 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useFollows } from '../hooks/useFollows';
+import { useBonds } from '../hooks/useBonds';
+import { useRequests } from '../hooks/useRequests';
 import { useRecommendations } from '../hooks/useRecommendations';
 import Avatar from '../components/Avatar';
 
 export default function Notifications() {
   const { pendingIn } = useFollows();
+  const { pendingBonds } = useBonds();
+  const { pendingIncoming } = useRequests();
   const { received, markAsRead, unreadCount } = useRecommendations();
 
   // Mark recommendations as read when viewing this page
@@ -14,7 +19,7 @@ export default function Notifications() {
       .forEach((r) => markAsRead(r.id));
   }, [received, markAsRead]);
 
-  const hasNotifications = pendingIn.length > 0 || received.length > 0;
+  const hasNotifications = pendingIn.length > 0 || received.length > 0 || pendingBonds.length > 0 || pendingIncoming.length > 0;
 
   return (
     <div className="page">
@@ -24,6 +29,50 @@ export default function Notifications() {
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>
           No hay notificaciones.
         </p>
+      )}
+
+      {/* Pending book requests */}
+      {pendingIncoming.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="section-title">Pedidos de libros</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pendingIncoming.map((r) => (
+              <div key={r.id} style={rowStyle}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{r.fromName}</strong> te pidio{' '}
+                    {r.books?.length || 0} {(r.books?.length || 0) === 1 ? 'libro' : 'libros'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {r.books?.map((b) => b.title).join(', ')}
+                  </div>
+                </div>
+                <Link to="/requests" className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px', textDecoration: 'none' }}>
+                  Revisar
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Pending bonds */}
+      {pendingBonds.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h3 className="section-title">Vinculos pendientes</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pendingBonds.filter((b) => !b.iAmInitiator).map((b) => (
+              <div key={b.id} style={rowStyle}>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{b.peerName}</strong> quiere vincularse contigo
+                </div>
+                <Link to="/people" className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px', textDecoration: 'none' }}>
+                  Ver
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Follow requests */}

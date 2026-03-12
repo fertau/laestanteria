@@ -82,5 +82,29 @@ service cloud.firestore {
       allow read: if isRegistered() && request.auth.uid == uid;
       allow write: if false;
     }
+
+    match /bonds/{bondId} {
+      allow read: if isRegistered() &&
+        (resource.data.userA == request.auth.uid ||
+         resource.data.userB == request.auth.uid);
+      allow create: if isRegistered() &&
+        request.resource.data.initiatedBy == request.auth.uid;
+      allow update: if isRegistered() &&
+        (resource.data.userA == request.auth.uid ||
+         resource.data.userB == request.auth.uid);
+      allow delete: if isRegistered() &&
+        (resource.data.userA == request.auth.uid ||
+         resource.data.userB == request.auth.uid);
+    }
+
+    match /requests/{requestId} {
+      allow read: if isRegistered() &&
+        (resource.data.fromUid == request.auth.uid ||
+         resource.data.toUid == request.auth.uid);
+      allow create: if isRegistered() &&
+        request.resource.data.fromUid == request.auth.uid;
+      allow update: if isRegistered() &&
+        resource.data.toUid == request.auth.uid;
+    }
   }
 }

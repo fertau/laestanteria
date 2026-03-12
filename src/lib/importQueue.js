@@ -2,11 +2,7 @@
  * Import queue engine for bulk book import.
  * Handles both multi-file (plain) and Calibre mode.
  *
- * IMPORTANT: This module calls Drive/Firestore directly instead of going
- * through useBooks.uploadBook. This avoids per-book token refresh popups
- * that get blocked by the browser in async loops.
- * The token and folderId are obtained ONCE before the loop starts
- * (in ImportModal.startProcessing, triggered by user click).
+ * EPUBs are saved locally (OPFS/IndexedDB) and metadata to Firestore.
  */
 
 import { parseFilename } from './parseFilename';
@@ -15,7 +11,7 @@ import { parseCalibreOpf, getCalibreCoverUrl } from './calibreParser';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from './openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from './googleBooks';
 import { searchByTitleAuthor as hcSearch, searchCovers as hcSearchCovers } from './hardcover';
-import { uploadEpubToDrive, shareWithServiceAccount } from './googleDrive';
+import { saveEpub } from './localStore';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -177,16 +173,16 @@ export async function enrichMetadataStandalone(baseMeta) {
 
 /**
  * Process a single queue item through the full pipeline.
- * Uses pre-fetched accessToken and folderId to avoid per-book token popups.
+ * Saves EPUB locally and metadata to Firestore.
  *
  * @param {ImportQueueItem} item
- * @param {Object} context - { books, accessToken, folderId, uid, profile }
+ * @param {Object} context - { books, uid, profile }
  * @param {(update: Partial<ImportQueueItem>) => void} onUpdate
  * @param {((extractedMeta: Object) => Promise<{title,author,isbn}|null>)|null} onNeedsIdentification
  * @returns {Promise<'done'|'skipped'|'error'>}
  */
 export async function processQueueItem(item, context, onUpdate, onNeedsIdentification = null) {
-  const { books, accessToken, folderId, uid, profile } = context;
+  const { books, uid, profile } = context;
 
   try {
     // --- Phase 1: Hash ---
@@ -375,30 +371,15 @@ export async function processQueueItem(item, context, onUpdate, onNeedsIdentific
 
     onUpdate({ metadata: meta });
 
-    // --- Phase 4: Upload directly to Drive + Firestore ---
-    // (bypasses uploadBook to avoid per-book token refresh)
+    // --- Phase 4: Save EPUB locally + metadata to Firestore ---
     onUpdate({ status: 'uploading' });
 
-    const driveTitle = `${meta.author.trim()} - ${meta.title.trim()}`;
-    const { driveFileId } = await uploadEpubToDrive(
-      accessToken,
-      item.file,
-      driveTitle,
-      folderId,
-      (pct) => onUpdate({ progress: pct })
-    );
+    // Save EPUB to local storage (OPFS or IndexedDB)
+    onUpdate({ progress: 10 });
+    await saveEpub(fileHash, item.file);
+    onUpdate({ progress: 50 });
 
-    // Share with service account
-    const saEmail = import.meta.env.VITE_SERVICE_ACCOUNT_EMAIL;
-    if (saEmail) {
-      try {
-        await shareWithServiceAccount(accessToken, driveFileId, saEmail);
-      } catch (err) {
-        console.warn('Could not share with service account:', err.message);
-      }
-    }
-
-    // Write to Firestore
+    // Write metadata to Firestore
     await addDoc(collection(db, 'books'), {
       title: meta.title.trim(),
       author: meta.author.trim(),
@@ -406,8 +387,6 @@ export async function processQueueItem(item, context, onUpdate, onNeedsIdentific
       language: meta.language || 'es',
       description: (meta.description || '').trim(),
       coverUrl: (meta.coverUrl && !meta.coverUrl.startsWith('blob:')) ? meta.coverUrl : '',
-      driveFileId,
-      driveOwnerUid: uid,
       fileHash,
       isbn: meta.isbn || null,
       bookGroupId: null,

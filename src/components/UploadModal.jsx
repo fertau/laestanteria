@@ -7,6 +7,7 @@ import { parseEpub } from '../lib/epubParser';
 import { parseFilename } from '../lib/parseFilename';
 import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchCovers } from '../lib/openLibrary';
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from '../lib/googleBooks';
+import HelpTip from './HelpTip';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -537,7 +538,7 @@ export default function UploadModal({ onClose }) {
       toast('Libro agregado!', 'success');
       onClose();
     } catch (err) {
-      toast('Error al subir: ' + err.message, 'error');
+      toast('Error al agregar: ' + err.message, 'error');
     } finally {
       setUploading(false);
     }
@@ -579,7 +580,8 @@ export default function UploadModal({ onClose }) {
           marginBottom: 20,
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
-            Subir libro
+            Agregar libro
+            <HelpTip text="El EPUB se guarda en tu navegador. Solo se comparte la metadata (titulo, autor, portada) con otros usuarios." size={16} position="bottom" />
           </h2>
           <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
             X
@@ -721,7 +723,7 @@ export default function UploadModal({ onClose }) {
                       style={{ fontSize: 12 }}
                       onClick={() => setDupAction('proceed')}
                     >
-                      Subir como libro nuevo
+                      Agregar como libro nuevo
                     </button>
                     <button
                       type="button"
@@ -959,7 +961,7 @@ export default function UploadModal({ onClose }) {
               className="btn btn-primary"
               disabled={uploading || !file || !title.trim() || !author.trim() || (dupCheck?.type === 'hash' && !dupAction) || fetchingMeta}
             >
-              {uploading ? `Subiendo... ${progress}%` : 'Subir libro'}
+              {uploading ? `Guardando... ${progress}%` : 'Agregar libro'}
             </button>
           </div>
         </form>

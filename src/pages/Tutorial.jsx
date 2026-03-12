@@ -15,7 +15,7 @@ export default function Tutorial() {
         <TutorialStep number={1} title="Bienvenida" icon={BookOpen}>
           <p>
             <strong>La Estanteria</strong> es una biblioteca compartida entre amigos.
-            Podes subir tus libros digitales (EPUB), ver que estan leyendo tus amigos,
+            Podes agregar tus libros digitales (EPUB), ver que estan leyendo tus amigos,
             y enviarte libros directamente a tu Kindle.
           </p>
           <p style={{ marginTop: 8 }}>
@@ -32,8 +32,8 @@ export default function Tutorial() {
           <div style={{ marginTop: 12, padding: '12px 16px', background: 'var(--bg)', borderRadius: 'var(--radius)', fontSize: 13 }}>
             <strong style={{ color: 'var(--accent)' }}>Hay 2 niveles de acceso:</strong>
             <ul style={{ margin: '8px 0 0 16px', lineHeight: 1.8 }}>
-              <li><strong>Actividad</strong> — ves cuando suben o leen libros</li>
-              <li><strong>Biblioteca</strong> — ademas podes descargar sus libros a tu Kindle</li>
+              <li><strong>Actividad</strong> — ves cuando agregan o leen libros</li>
+              <li><strong>Biblioteca</strong> — ademas podes pedirles libros a tu Kindle</li>
             </ul>
             <p style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: 12 }}>
               Cada persona elige que nivel de acceso darte. Si tiene modo cerrado, primero te tiene que aceptar.
@@ -122,11 +122,11 @@ export default function Tutorial() {
         </TutorialStep>
 
         {/* Step 5: Upload first book */}
-        <TutorialStep number={5} title="Subi tu primer libro" icon={Upload}>
+        <TutorialStep number={5} title="Agrega tu primer libro" icon={Upload}>
           <p>
             Anda a{' '}
             <Link to="/catalog" style={{ color: 'var(--accent)', fontWeight: 600 }}>Catalogo</Link>
-            {' '}y toca el boton de subir. Podes subir archivos <strong>EPUB</strong> desde tu computadora o celular.
+            {' '}y toca el boton de agregar. Podes agregar archivos <strong>EPUB</strong> desde tu computadora o celular.
           </p>
           <p style={{ marginTop: 8 }}>
             La app va a buscar automaticamente la portada y los datos del libro.

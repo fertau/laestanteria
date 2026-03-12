@@ -114,6 +114,26 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Stats overview */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+        gap: 8,
+        marginBottom: 32,
+      }}>
+        <MiniStat label="Agregados" value={myBooks.length} />
+        {isOwnProfile && (
+          <>
+            <MiniStat label="Quiero leer" value={wantToRead.length} />
+            <MiniStat label="Leyendo" value={reading.length} />
+            <MiniStat label="Leidos" value={finished.length} />
+            <MiniStat label="Siguiendo" value={following.length} />
+            <MiniStat label="Seguidores" value={followers.length} />
+          </>
+        )}
+      </div>
+
+
       {isOwnProfile && (
         <>
           {/* ═══ Mis Libros ═══ */}
@@ -122,7 +142,7 @@ export default function Profile() {
           {/* Book category rows */}
           <BookRow
             icon={Upload}
-            label="Subidos"
+            label="Agregados"
             count={myBooks.length}
             books={myBooks}
             onBookClick={setSelectedBook}
@@ -252,7 +272,7 @@ export default function Profile() {
       {!isOwnProfile && myBooks.length > 0 && (
         <BookRow
           icon={Upload}
-          label="Libros subidos"
+          label="Libros agregados"
           count={myBooks.length}
           books={myBooks}
           onBookClick={setSelectedBook}
@@ -311,6 +331,21 @@ function BookRow({ icon: Icon, label, count, books, onBookClick, linkTo, linkLab
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      borderRadius: 'var(--radius)',
+      padding: '10px 12px',
+      textAlign: 'center',
+      border: '1px solid var(--border)',
+    }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
     </div>
   );
 }
