@@ -8,6 +8,7 @@ import { searchCovers as olCovers } from '../lib/openLibrary';
 import { searchCovers as hcCovers } from '../lib/hardcover';
 import { searchCovers as giCovers } from '../lib/googleImageSearch';
 import { isValidCover } from '../lib/coverUtils';
+import { mapGenre } from '../lib/genreUtils';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -55,34 +56,6 @@ function normalizeTitle(raw) {
   }
 
   return t.replace(/\s{2,}/g, ' ').trim();
-}
-
-/**
- * Map a free-text genre string from APIs to one of our standard genres.
- */
-function mapGenre(genreStr) {
-  if (!genreStr) return '';
-  const mapping = [
-    [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
-    [/non.?fic|no.?ficc/i, 'No ficcion'],
-    [/sci.?fi|science.?fic|ciencia.?fic/i, 'Ciencia ficcion'],
-    [/fantas[yí]/i, 'Fantasia'],
-    [/myster|thriller|suspens|misterio/i, 'Misterio'],
-    [/roman[ct]/i, 'Romance'],
-    [/histor/i, 'Historia'],
-    [/scien[ct]|ciencia/i, 'Ciencia'],
-    [/philos|filosof/i, 'Filosofia'],
-    [/biograph|biograf|memoir/i, 'Biografia'],
-    [/self.?help|autoayuda|personal/i, 'Autoayuda'],
-    [/business|negocio|econom|financ/i, 'Negocios'],
-    [/art(?!if)/i, 'Arte'],
-    [/poet|poes/i, 'Poesia'],
-    [/child|infant|juvenil|kid/i, 'Infantil'],
-  ];
-  for (const [regex, mapped] of mapping) {
-    if (regex.test(genreStr)) return mapped;
-  }
-  return '';
 }
 
 /** Source badge color mapping */

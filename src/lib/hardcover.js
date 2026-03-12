@@ -61,7 +61,7 @@ function normalizeBook(book) {
         ? JSON.parse(book.cached_tags)
         : book.cached_tags;
       if (Array.isArray(tags) && tags.length > 0) {
-        genre = tags.slice(0, 2).map((t) => t.tag || t.name || t).join(', ');
+        genre = tags.slice(0, 5).map((t) => t.tag || t.name || t).join(', ');
       }
     } catch { /* ignore parse error */ }
   }
@@ -279,7 +279,7 @@ function normalizeSearchHit(hit) {
     try {
       const tags = typeof hit.cached_tags === 'string' ? JSON.parse(hit.cached_tags) : hit.cached_tags;
       if (Array.isArray(tags) && tags.length > 0) {
-        genre = tags.slice(0, 2).map((t) => t.tag || t.name || (typeof t === 'string' ? t : '')).filter(Boolean).join(', ');
+        genre = tags.slice(0, 5).map((t) => t.tag || t.name || (typeof t === 'string' ? t : '')).filter(Boolean).join(', ');
       }
     } catch { /* ignore */ }
   }

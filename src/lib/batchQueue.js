@@ -10,23 +10,7 @@ import { searchMultiple as gbSearchMultiple, searchCovers as gbSearchCovers } fr
 import { searchMultiple as olSearchMultiple, searchCovers as olSearchCovers } from './openLibrary';
 import { searchMultiple as hcSearchMultiple, searchCovers as hcSearchCovers } from './hardcover';
 
-const GENRE_MAP = [
-  [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
-  [/non.?fic|no.?ficc/i, 'No ficcion'],
-  [/sci.?fi|science.?fic|ciencia.?fic/i, 'Ciencia ficcion'],
-  [/fantas[yí]/i, 'Fantasia'],
-  [/myster|thriller|suspens|misterio/i, 'Misterio'],
-  [/roman[ct]/i, 'Romance'],
-  [/histor/i, 'Historia'],
-  [/scien[ct]|ciencia/i, 'Ciencia'],
-  [/philos|filosof/i, 'Filosofia'],
-  [/biograph|biograf|memoir/i, 'Biografia'],
-  [/self.?help|autoayuda|personal/i, 'Autoayuda'],
-  [/business|negocio|econom|financ/i, 'Negocios'],
-  [/art(?!if)/i, 'Arte'],
-  [/poet|poes/i, 'Poesia'],
-  [/child|infant|juvenil|kid/i, 'Infantil'],
-];
+import { mapGenre } from './genreUtils';
 
 /**
  * Normalize a string for dedup: lowercase, strip punctuation, collapse spaces.
@@ -34,14 +18,6 @@ const GENRE_MAP = [
  */
 function normalizeForDedup(str) {
   return str.toLowerCase().replace(/[^\w\s|]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function mapGenre(genreStr) {
-  if (!genreStr) return '';
-  for (const [regex, mapped] of GENRE_MAP) {
-    if (regex.test(genreStr)) return mapped;
-  }
-  return '';
 }
 
 /** Count non-empty metadata fields for completeness ranking (BookLore pattern). */

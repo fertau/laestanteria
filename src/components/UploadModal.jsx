@@ -9,6 +9,7 @@ import { fetchByISBN, searchByTitleAuthor as olSearch, searchCovers as olSearchC
 import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers as gbSearchCovers } from '../lib/googleBooks';
 import HelpTip from './HelpTip';
 import { isValidCover } from '../lib/coverUtils';
+import { mapGenre } from '../lib/genreUtils';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -212,34 +213,6 @@ export default function UploadModal({ onClose }) {
     return { enriched, foundCover };
   };
 
-  /**
-   * Try to map a free-text genre string to one of our GENRES.
-   */
-  const mapGenre = (genreStr) => {
-    if (!genreStr) return '';
-    const g = genreStr.toLowerCase();
-    const mapping = [
-      [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
-      [/non.?fic|no.?ficc/i, 'No ficcion'],
-      [/sci.?fi|science.?fic|ciencia.?fic/i, 'Ciencia ficcion'],
-      [/fantas[yí]/i, 'Fantasia'],
-      [/myster|thriller|suspens|misterio/i, 'Misterio'],
-      [/roman[ct]/i, 'Romance'],
-      [/histor/i, 'Historia'],
-      [/scien[ct]|ciencia/i, 'Ciencia'],
-      [/philos|filosof/i, 'Filosofia'],
-      [/biograph|biograf|memoir/i, 'Biografia'],
-      [/self.?help|autoayuda|personal/i, 'Autoayuda'],
-      [/business|negocio|econom|financ/i, 'Negocios'],
-      [/art(?!if)/i, 'Arte'],
-      [/poet|poes/i, 'Poesia'],
-      [/child|infant|juvenil|kid/i, 'Infantil'],
-    ];
-    for (const [regex, mapped] of mapping) {
-      if (regex.test(g)) return mapped;
-    }
-    return '';
-  };
 
   // Validate EPUB file + auto-extract metadata
   const validateFile = async (f) => {

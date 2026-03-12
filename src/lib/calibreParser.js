@@ -13,35 +13,7 @@
 
 import { cleanHtml } from './epubParser';
 
-/**
- * Genre mapping: free-text subjects → app genre values.
- * Same regex patterns as UploadModal.mapGenre.
- */
-const GENRE_MAP = [
-  [/fic[ct]i[oó]n|novel|literary/i, 'Ficcion'],
-  [/non.?fic|no.?ficc/i, 'No ficcion'],
-  [/sci.?fi|science.?fic|ciencia.?fic/i, 'Ciencia ficcion'],
-  [/fantas[yí]/i, 'Fantasia'],
-  [/myster|thriller|suspens|misterio/i, 'Misterio'],
-  [/roman[ct]/i, 'Romance'],
-  [/histor/i, 'Historia'],
-  [/scien[ct]|ciencia/i, 'Ciencia'],
-  [/philos|filosof/i, 'Filosofia'],
-  [/biograph|biograf|memoir/i, 'Biografia'],
-  [/self.?help|autoayuda|personal/i, 'Autoayuda'],
-  [/business|negocio|econom|financ/i, 'Negocios'],
-  [/art(?!if)/i, 'Arte'],
-  [/poet|poes/i, 'Poesia'],
-  [/child|infant|juvenil|kid/i, 'Infantil'],
-];
-
-function mapGenre(genreStr) {
-  if (!genreStr) return '';
-  for (const [regex, mapped] of GENRE_MAP) {
-    if (regex.test(genreStr)) return mapped;
-  }
-  return '';
-}
+import { mapGenre } from './genreUtils';
 
 const LANG_MAP = {
   es: 'es', spa: 'es', 'es-ar': 'es', 'es-es': 'es', 'es-mx': 'es',

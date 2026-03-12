@@ -234,7 +234,7 @@ function normalizeVolume(item) {
     author: info.authors?.join(', ') || '',
     description: cleanDescription(info.description || ''),
     coverUrl,
-    genre: info.categories?.slice(0, 2).join(', ') || '',
+    genre: info.categories?.slice(0, 5).join(', ') || '',
     publishDate: info.publishedDate || '',
     isbn,
     language,
