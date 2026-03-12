@@ -5,6 +5,7 @@ import { useBooks } from '../hooks/useBooks';
 import { useToast } from '../hooks/useToast';
 import { buildBatchItem, processBatchItem, applyBatchItem, reSearchBatchItem, buildDiffFromCandidate } from '../lib/batchQueue';
 import { searchCovers as giCovers } from '../lib/googleImageSearch';
+import EditBookModal from '../components/EditBookModal';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -69,6 +70,9 @@ export default function BatchUpdate() {
   const [reSearchAuthor, setReSearchAuthor] = useState('');
   const [reSearchIsbn, setReSearchIsbn] = useState('');
   const [reSearching, setReSearching] = useState(false);
+
+  // EditBookModal state — opened from review phase
+  const [editingBook, setEditingBook] = useState(null);
 
   // Stats for done phase
   const [stats, setStats] = useState({ updated: 0, unchanged: 0, errors: 0 });
@@ -821,7 +825,7 @@ export default function BatchUpdate() {
                         </div>
                       )}
 
-                      {/* No candidates — prominent re-search button */}
+                      {/* No candidates — open full edit modal */}
                       {!hasCandidates && item.status !== 'error' && (
                         <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
                           <div style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 8 }}>
@@ -831,14 +835,29 @@ export default function BatchUpdate() {
                             type="button"
                             className="btn btn-secondary"
                             style={{ fontSize: 12 }}
-                            onClick={() => {
-                              setReSearchId(item.id);
-                              setReSearchTitle(item.book.title || '');
-                              setReSearchAuthor(item.book.author || '');
-                              setReSearchIsbn(item.book.isbn || '');
+                            onClick={() => setEditingBook(item.book)}
+                          >
+                            ✨ Editar y buscar
+                          </button>
+                        </div>
+                      )}
+
+                      {/* "Edit with magic wand" button — always visible */}
+                      {hasCandidates && (
+                        <div style={{ padding: '6px 12px', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            onClick={() => setEditingBook(item.book)}
+                            style={{
+                              fontSize: 11, padding: '4px 10px',
+                              border: '1px dashed var(--accent)',
+                              borderRadius: 'var(--radius)',
+                              background: 'transparent',
+                              color: 'var(--accent)',
+                              cursor: 'pointer',
                             }}
                           >
-                            Buscar manualmente
+                            ✨ Editar con varita
                           </button>
                         </div>
                       )}
@@ -1105,6 +1124,14 @@ export default function BatchUpdate() {
             Volver al catalogo
           </Link>
         </div>
+      )}
+      {/* EditBookModal — opened from review phase */}
+      {editingBook && (
+        <EditBookModal
+          book={editingBook}
+          onClose={() => setEditingBook(null)}
+          onSaved={() => setEditingBook(null)}
+        />
       )}
     </div>
   );

@@ -126,29 +126,60 @@ export function useBooks() {
     []
   );
 
-  // Group books by bookGroupId for multi-language display.
-  // Books sharing a groupId become one "group card" with language variants.
+  // Group books for multi-language display.
+  // Two grouping strategies (merged):
+  // 1. Explicit bookGroupId (set manually or via batch)
+  // 2. Auto-detect: same normalized title+author, different languages
   const groupedBooks = useMemo(() => {
-    const groups = new Map(); // groupId → Book[]
-    const ungrouped = [];
+    // Normalize for matching: lowercase, remove accents, collapse whitespace
+    const normalize = (s) =>
+      (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
+    const groups = new Map(); // groupKey → Book[]
+    const bookToGroup = new Map(); // book.id → groupKey
+
+    // Pass 1: explicit bookGroupId
     for (const book of allBooks) {
       if (book.bookGroupId) {
-        if (!groups.has(book.bookGroupId)) groups.set(book.bookGroupId, []);
-        groups.get(book.bookGroupId).push(book);
-      } else {
-        ungrouped.push(book);
+        const key = `explicit:${book.bookGroupId}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(book);
+        bookToGroup.set(book.id, key);
       }
     }
 
-    const result = [...ungrouped];
+    // Pass 2: auto-detect by normalized title+author (only for ungrouped books)
+    for (const book of allBooks) {
+      if (bookToGroup.has(book.id)) continue;
+      const titleNorm = normalize(book.title);
+      const authorNorm = normalize(book.author);
+      if (!titleNorm || !authorNorm) continue;
+      const key = `auto:${titleNorm}::${authorNorm}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(book);
+      bookToGroup.set(book.id, key);
+    }
 
-    for (const [groupId, variants] of groups) {
-      if (variants.length === 1) {
-        // Solo book in group — treat as ungrouped
-        result.push(variants[0]);
+    // Pass 3: truly ungrouped (no title or author)
+    const ungrouped = allBooks.filter((b) => !bookToGroup.has(b.id));
+
+    // Build result
+    const result = [...ungrouped];
+    const seen = new Set();
+
+    for (const [groupKey, variants] of groups) {
+      // Deduplicate: same language = real duplicate, keep; different language = group
+      const uniqueLangs = new Set(variants.map((v) => v.language).filter(Boolean));
+      if (variants.length === 1 || uniqueLangs.size <= 1) {
+        // Not a multi-language group — add individually
+        for (const v of variants) {
+          if (!seen.has(v.id)) {
+            result.push(v);
+            seen.add(v.id);
+          }
+        }
       } else {
-        // Sort: user's own books first, then by uploadedAt desc
+        // Multi-language group — merge into one card
         variants.sort((a, b) => {
           const aOwn = a.uploadedBy?.uid === uid ? 1 : 0;
           const bOwn = b.uploadedBy?.uid === uid ? 1 : 0;
@@ -159,10 +190,11 @@ export function useBooks() {
         result.push({
           ...primary,
           _isGroup: true,
-          _groupId: groupId,
+          _groupId: groupKey,
           _variants: variants,
-          _languages: variants.map((v) => v.language).filter(Boolean),
+          _languages: [...uniqueLangs],
         });
+        for (const v of variants) seen.add(v.id);
       }
     }
 

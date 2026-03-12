@@ -75,7 +75,13 @@ export default function BookModal({ book, onClose }) {
         toast('Rating eliminado', 'info');
       } else {
         await rate(value);
-        toast('Rating guardado', 'success');
+        // Auto-set reading status to "finished" when rating a book
+        if (!readingStatus || readingStatus !== 'finished') {
+          await setReadingStatus('finished');
+          toast('Rating guardado · Marcado como leido', 'success');
+        } else {
+          toast('Rating guardado', 'success');
+        }
       }
     } catch {
       toast('Error al guardar rating', 'error');

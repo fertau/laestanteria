@@ -16,12 +16,12 @@ const GENRES = [
 ];
 
 const LANGUAGES = [
-  { value: 'es', label: 'Espanol' },
-  { value: 'en', label: 'Ingles' },
-  { value: 'pt', label: 'Portugues' },
-  { value: 'fr', label: 'Frances' },
-  { value: 'de', label: 'Aleman' },
-  { value: 'it', label: 'Italiano' },
+  { value: 'es', label: 'ES' },
+  { value: 'en', label: 'EN' },
+  { value: 'pt', label: 'PT' },
+  { value: 'fr', label: 'FR' },
+  { value: 'de', label: 'DE' },
+  { value: 'it', label: 'IT' },
   { value: 'other', label: 'Otro' },
 ];
 
@@ -97,6 +97,9 @@ function sourceLabel(src) {
   if (src === 'hardcover') return 'Hardcover';
   return 'OpenLib';
 }
+
+/* ---- Compact label ---- */
+const labelSt = { display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, fontWeight: 600 };
 
 /**
  * EditBookModal — Edit all metadata fields of an existing book.
@@ -175,9 +178,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
       // In auto mode: auto-apply the best candidate silently
       if (autoMode && cands.length > 0) {
         const best = cands[0];
-        // Only auto-fill cover if current is empty
         if (best.coverUrl && (!coverUrl || coverUrl.startsWith('blob:'))) {
-          // Validate before setting
           const coverCandidates = [best.coverUrl, ...unique.map((c) => c.url)].filter(Boolean);
           for (const url of coverCandidates) {
             if (await isValidCover(url)) {
@@ -194,7 +195,6 @@ export default function EditBookModal({ book, onClose, onSaved }) {
         setSelectedCandidateIndex(0);
         setPhase('candidates');
       } else if (unique.length > 0) {
-        // No metadata candidates but found covers
         setPhase('candidates');
         toast('No se encontraron candidatos, pero hay portadas disponibles', 'info');
       } else {
@@ -215,7 +215,6 @@ export default function EditBookModal({ book, onClose, onSaved }) {
     }
     const cand = candidates[selectedCandidateIndex];
 
-    // Apply metadata
     if (cand.title) setTitle(normalizeTitle(cand.title));
     if (cand.author) setAuthor(normalizeTitle(cand.author));
     if (cand.description) setDescription(cand.description);
@@ -310,45 +309,45 @@ export default function EditBookModal({ book, onClose, onSaved }) {
         background: 'var(--bg)',
         borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
-        width: '100%', maxWidth: 520,
+        width: '100%', maxWidth: 540,
         maxHeight: '90vh', overflowY: 'auto',
-        padding: 28,
+        padding: '20px 24px 24px',
       }}>
         {/* Header */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 20,
+          marginBottom: 16,
         }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, margin: 0 }}>
             Editar libro
           </h2>
-          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>X</button>
+          <button onClick={onClose} className="btn-ghost" style={{ fontSize: 16, padding: '2px 6px' }}>✕</button>
         </div>
 
         {/* Searching overlay */}
         {phase === 'searching' && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            marginBottom: 16, padding: '12px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            marginBottom: 14, padding: '10px 14px',
             background: 'var(--surface)', borderRadius: 'var(--radius)',
-            fontSize: 13, color: 'var(--text-muted)',
+            fontSize: 12, color: 'var(--text-muted)',
           }}>
-            <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+            <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
             Buscando en Google Books, Open Library y Hardcover...
           </div>
         )}
 
         {/* ====== CANDIDATES PHASE ====== */}
         {phase === 'candidates' && (
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 16 }}>
             {/* Candidate strip */}
             {candidates.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
                   {candidates.length} candidatos — selecciona el correcto:
                 </div>
                 <div style={{
-                  display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6,
+                  display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6,
                 }}>
                   {candidates.map((cand, ci) => (
                     <button
@@ -356,7 +355,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                       type="button"
                       onClick={() => setSelectedCandidateIndex(ci)}
                       style={{
-                        flexShrink: 0, width: 120, padding: 8,
+                        flexShrink: 0, width: 110, padding: 6,
                         border: selectedCandidateIndex === ci
                           ? '2px solid var(--accent)' : '1px solid var(--border)',
                         borderRadius: 'var(--radius)',
@@ -366,8 +365,8 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                       }}
                     >
                       <div style={{
-                        width: '100%', height: 80, borderRadius: 4,
-                        overflow: 'hidden', background: 'var(--surface)', marginBottom: 6,
+                        width: '100%', height: 72, borderRadius: 3,
+                        overflow: 'hidden', background: 'var(--surface)', marginBottom: 4,
                       }}>
                         {cand.coverUrl ? (
                           <img
@@ -385,23 +384,23 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                         )}
                       </div>
                       <div style={{
-                        fontSize: 11, fontWeight: 600,
+                        fontSize: 10, fontWeight: 600,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         color: 'var(--text)',
                       }}>
                         {cand.title || '(sin titulo)'}
                       </div>
                       <div style={{
-                        fontSize: 10, color: 'var(--text-muted)',
+                        fontSize: 9, color: 'var(--text-muted)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {cand.author || '(sin autor)'}
                       </div>
                       <span style={{
-                        display: 'inline-block', fontSize: 9, fontWeight: 700,
+                        display: 'inline-block', fontSize: 8, fontWeight: 700,
                         color: (SOURCE_COLORS[cand.source] || SOURCE_COLORS.openlibrary).color,
                         background: (SOURCE_COLORS[cand.source] || SOURCE_COLORS.openlibrary).bg,
-                        padding: '1px 5px', borderRadius: 3, marginTop: 4,
+                        padding: '1px 4px', borderRadius: 3, marginTop: 3,
                       }}>
                         {sourceLabel(cand.source)}
                       </span>
@@ -413,25 +412,25 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
             {/* Cover gallery */}
             {coverOptions.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  marginBottom: 6,
+                  marginBottom: 4,
                 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {coverOptions.length} portadas — click para seleccionar:
+                    Portadas:
                   </span>
                   <button
                     type="button"
                     onClick={handleGoogleImageSearch}
                     disabled={searchingGI}
                     className="btn btn-ghost"
-                    style={{ fontSize: 11, padding: '2px 8px' }}
+                    style={{ fontSize: 10, padding: '2px 6px' }}
                   >
-                    {searchingGI ? '...' : '✨ Google Images'}
+                    {searchingGI ? '...' : '+ Google Images'}
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
                   {coverOptions.map((opt, i) => (
                     <button
                       key={i}
@@ -441,9 +440,9 @@ export default function EditBookModal({ book, onClose, onSaved }) {
                         toast('Portada seleccionada', 'success');
                       }}
                       style={{
-                        flexShrink: 0, width: 60, height: 90, padding: 0,
+                        flexShrink: 0, width: 50, height: 75, padding: 0,
                         border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
-                        borderRadius: 4, overflow: 'hidden', cursor: 'pointer',
+                        borderRadius: 3, overflow: 'hidden', cursor: 'pointer',
                         background: 'var(--surface)', transition: 'border-color 0.15s',
                       }}
                       title={`${opt.label} (${opt.source})`}
@@ -459,23 +458,24 @@ export default function EditBookModal({ book, onClose, onSaved }) {
               </div>
             )}
 
-            {/* Candidate action buttons */}
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* Candidate action buttons — compact, centered */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
               <button
                 type="button"
                 onClick={applyCandidate}
                 className="btn btn-primary"
                 disabled={selectedCandidateIndex < 0}
-                style={{ flex: 1 }}
+                style={{ fontSize: 12, padding: '8px 20px' }}
               >
-                Aplicar y editar
+                Aplicar seleccion
               </button>
               <button
                 type="button"
                 onClick={() => setPhase('form')}
-                className="btn btn-secondary"
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: '8px 12px' }}
               >
-                Cancelar busqueda
+                Omitir
               </button>
             </div>
           </div>
@@ -483,178 +483,198 @@ export default function EditBookModal({ book, onClose, onSaved }) {
 
         {/* ====== FORM PHASE ====== */}
         <form onSubmit={handleSubmit}>
-          {/* Cover + Magic Wand row */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              {/* Cover preview */}
-              <div style={{
-                width: 80, height: 120, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
-                background: 'var(--surface)',
-                border: coverUrl ? '2px solid var(--accent)' : '2px dashed var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {coverUrl && !coverUrl.startsWith('blob:') ? (
-                  <img
-                    src={coverUrl} alt="Portada"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', padding: 4 }}>
-                    Sin portada
-                  </span>
-                )}
-              </div>
-
-              {/* Magic wand + cover URL */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Cover + search + title/author — compact top row */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            {/* Cover preview */}
+            <div style={{
+              width: 72, height: 108, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
+              background: 'var(--surface)',
+              border: coverUrl ? '2px solid var(--accent)' : '2px dashed var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'relative',
+            }}>
+              {coverUrl && !coverUrl.startsWith('blob:') ? (
+                <img
+                  src={coverUrl} alt="Portada"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <span style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center', padding: 4 }}>
+                  Sin portada
+                </span>
+              )}
+              {coverUrl && (
                 <button
                   type="button"
-                  onClick={() => handleMagicSearch(false)}
-                  disabled={phase === 'searching' || (!title.trim() && !isbn.trim())}
-                  className="btn btn-primary"
-                  style={{ fontSize: 13, width: '100%' }}
-                >
-                  {phase === 'searching' ? 'Buscando...' : '✨ Buscar libro'}
-                </button>
-                {coverUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setCoverUrl('')}
-                    className="btn btn-ghost"
-                    style={{ fontSize: 11, color: 'var(--danger)' }}
-                  >
-                    Quitar portada
-                  </button>
-                )}
-                <input
-                  value={coverUrl}
-                  onChange={(e) => setCoverUrl(e.target.value)}
-                  placeholder="Pegar URL de portada..."
-                  style={{ fontSize: 12 }}
-                />
-              </div>
+                  onClick={() => setCoverUrl('')}
+                  style={{
+                    position: 'absolute', top: 2, right: 2,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.7)', color: '#fff',
+                    fontSize: 10, border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1,
+                  }}
+                  title="Quitar portada"
+                >✕</button>
+              )}
             </div>
 
-            {/* Cover options (persist from candidates phase) */}
-            {phase === 'form' && coverOptions.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                  {coverOptions.length} portadas disponibles:
-                </div>
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }}>
-                  {coverOptions.map((opt, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        setCoverUrl(opt.url);
-                        toast('Portada seleccionada', 'success');
-                      }}
-                      style={{
-                        flexShrink: 0, width: 60, height: 90, padding: 0,
-                        border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
-                        borderRadius: 4, overflow: 'hidden', cursor: 'pointer',
-                        background: 'var(--surface)', transition: 'border-color 0.15s',
-                      }}
-                      title={`${opt.label} (${opt.source})`}
-                    >
-                      <img
-                        src={opt.url} alt={opt.label}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => { e.target.parentElement.style.display = 'none'; }}
-                      />
-                    </button>
-                  ))}
-                </div>
+            {/* Title + Author + Search button */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div>
+                <label style={labelSt}>Titulo *</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  style={{ width: '100%', fontSize: 13, padding: '7px 10px' }}
+                />
               </div>
-            )}
+              <div>
+                <label style={labelSt}>Autor *</label>
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  required
+                  style={{ width: '100%', fontSize: 13, padding: '7px 10px' }}
+                />
+              </div>
+              {/* Magic wand — outline style, distinct from form actions */}
+              <button
+                type="button"
+                onClick={() => handleMagicSearch(false)}
+                disabled={phase === 'searching' || (!title.trim() && !isbn.trim())}
+                style={{
+                  width: '100%',
+                  padding: '6px 0',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: '1px dashed var(--accent)',
+                  borderRadius: 'var(--radius)',
+                  background: 'transparent',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  opacity: (phase === 'searching' || (!title.trim() && !isbn.trim())) ? 0.4 : 1,
+                  transition: 'all var(--transition)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>✨</span>
+                {phase === 'searching' ? 'Buscando...' : 'Buscar metadata'}
+              </button>
+            </div>
           </div>
 
-          {/* Title */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Titulo *
-            </label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
+          {/* Cover options (persist from candidates phase) */}
+          {phase === 'form' && coverOptions.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                  {coverOptions.length} portadas:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGoogleImageSearch}
+                  disabled={searchingGI}
+                  className="btn btn-ghost"
+                  style={{ fontSize: 10, padding: '1px 6px' }}
+                >
+                  {searchingGI ? '...' : '+ Google Images'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                {coverOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setCoverUrl(opt.url);
+                      toast('Portada seleccionada', 'success');
+                    }}
+                    style={{
+                      flexShrink: 0, width: 44, height: 66, padding: 0,
+                      border: coverUrl === opt.url ? '2px solid var(--accent)' : '2px solid transparent',
+                      borderRadius: 3, overflow: 'hidden', cursor: 'pointer',
+                      background: 'var(--surface)', transition: 'border-color 0.15s',
+                    }}
+                    title={`${opt.label} (${opt.source})`}
+                  >
+                    <img
+                      src={opt.url} alt={opt.label}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Author */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Autor *
-            </label>
-            <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
-
-          {/* Genre + Language row */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                Genero
-              </label>
-              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%' }}>
-                <option value="">Sin genero</option>
+          {/* Genre + Language + ISBN — all in one row */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ flex: 2 }}>
+              <label style={labelSt}>Genero</label>
+              <select value={genre} onChange={(e) => setGenre(e.target.value)} style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}>
+                <option value="">—</option>
                 {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                Idioma *
-              </label>
-              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%' }}>
+              <label style={labelSt}>Idioma</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} required style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}>
                 {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
+            <div style={{ flex: 2 }}>
+              <label style={labelSt}>ISBN</label>
+              <input
+                value={isbn}
+                onChange={(e) => setIsbn(e.target.value)}
+                placeholder="978-..."
+                style={{ width: '100%', fontSize: 12, padding: '7px 8px' }}
+              />
+            </div>
           </div>
 
-          {/* ISBN */}
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              ISBN
-            </label>
+          {/* Cover URL — small inline input */}
+          <div style={{ marginBottom: 10 }}>
+            <label style={labelSt}>URL portada</label>
             <input
-              value={isbn}
-              onChange={(e) => setIsbn(e.target.value)}
-              placeholder="978-..."
-              style={{ width: '100%' }}
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              placeholder="Pegar URL de portada..."
+              style={{ width: '100%', fontSize: 11, padding: '6px 8px' }}
             />
           </div>
 
-          {/* Description */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-              Descripcion
-            </label>
+          {/* Description — compact */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelSt}>Descripcion</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              style={{ width: '100%', resize: 'vertical' }}
+              rows={2}
+              style={{ width: '100%', resize: 'vertical', fontSize: 12, padding: '6px 8px' }}
             />
           </div>
 
-          {/* Submit */}
+          {/* Submit — right-aligned, compact */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary">
+            <button type="button" onClick={onClose} className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 14px' }}>
               Cancelar
             </button>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={saving || !title.trim() || !author.trim() || phase === 'searching'}
+              style={{ fontSize: 12, padding: '7px 18px' }}
             >
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
         </form>
