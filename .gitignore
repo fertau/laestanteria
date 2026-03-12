@@ -1,9 +1,20 @@
 node_modules
 dist
-.env.local
+
+# Environment files (may contain API keys and secrets)
 .env
+.env.local
+.env.production
+.env.production.local
+.env.development
+.env.development.local
 functions/.env
+
+# Service account credentials
 service-account.json
+functions/service-account.json
+
+# Other
 import-state.json
 *.log
 .DS_Store

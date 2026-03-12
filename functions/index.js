@@ -72,7 +72,27 @@ exports.sendToKindle = onCall({
     throw new HttpsError("invalid-argument", "El archivo es demasiado grande (max 50MB)");
   }
 
-  const fileName = `${bookAuthor || "Libro"} - ${bookTitle}.epub`;
+  const baseName = `${bookAuthor || "Libro"} - ${bookTitle}`.replace(/[/\\?%*:|"<>]/g, "-");
+
+  // Gmail blocks .epub attachments as a security risk.
+  // Wrap the EPUB in a proper ZIP so Gmail allows it through.
+  // Kindle accepts .zip files and will extract the EPUB inside.
+  const archiver = require("archiver");
+  const { PassThrough } = require("stream");
+
+  const zipBuffer = await new Promise((resolve, reject) => {
+    const chunks = [];
+    const passthrough = new PassThrough();
+    passthrough.on("data", (chunk) => chunks.push(chunk));
+    passthrough.on("end", () => resolve(Buffer.concat(chunks)));
+    passthrough.on("error", reject);
+
+    const archive = archiver("zip", { zlib: { level: 1 } });
+    archive.on("error", reject);
+    archive.pipe(passthrough);
+    archive.append(buffer, { name: `${baseName}.epub` });
+    archive.finalize();
+  });
 
   // Send via SMTP
   const transporter = getTransporter();
@@ -82,9 +102,9 @@ exports.sendToKindle = onCall({
     subject: "Libro de La estanteria",
     text: `${bookTitle} por ${bookAuthor || ""}`,
     attachments: [{
-      filename: fileName,
-      content: buffer,
-      contentType: "application/epub+zip",
+      filename: `${baseName}.zip`,
+      content: zipBuffer,
+      contentType: "application/zip",
     }],
   });
 

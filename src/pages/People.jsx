@@ -8,11 +8,11 @@ import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
 import Avatar from '../components/Avatar';
 import BondSetup, { BondAccept } from '../components/BondSetup';
-import { Users, UserPlus, UserCheck, Clock, Link2 } from 'lucide-react';
+import { Users, UserPlus, UserCheck, Clock, Link2, Gift } from 'lucide-react';
 import HelpTip from '../components/HelpTip';
 
 export default function People() {
-  const { user, profile } = useAuth();
+  const { user, profile, generateInviteCode, getMyInviteCodes } = useAuth();
   const {
     following,
     followers,
@@ -34,6 +34,8 @@ export default function People() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('bonds');
   const [bondTarget, setBondTarget] = useState(null);
+  const [inviteCodes, setInviteCodes] = useState([]);
+  const [generatedCode, setGeneratedCode] = useState(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -43,6 +45,35 @@ export default function People() {
       setLoading(false);
     })();
   }, [profile]);
+
+  useEffect(() => {
+    if (profile) getMyInviteCodes().then(setInviteCodes);
+  }, [profile, getMyInviteCodes]);
+
+  const handleGenerateCode = async () => {
+    try {
+      const code = await generateInviteCode();
+      setGeneratedCode(code);
+      setInviteCodes((prev) => [
+        { code, generatedBy: user.uid, usedBy: null, createdAt: new Date() },
+        ...prev,
+      ]);
+      toast('Codigo generado!', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast('Copiado al portapapeles', 'info');
+  };
+
+  const shareWhatsApp = (code) => {
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const text = `Te invito a La Estanteria! Usa este codigo para registrarte: ${code}\n${appUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   const otherUsers = allUsers.filter((u) => u.uid !== user?.uid);
 
@@ -108,6 +139,7 @@ export default function People() {
     { key: 'following', label: `Siguiendo (${following.length})`, icon: UserPlus },
     { key: 'followers', label: `Seguidores (${followers.length})`, icon: UserCheck },
     { key: 'pending', label: pendingIn.length > 0 || pendingBonds.length > 0 ? `Pendientes (${pendingIn.length + pendingBonds.length})` : 'Pendientes', icon: Clock },
+    { key: 'invite', label: 'Invitar', icon: Gift },
   ];
 
   return (
@@ -404,6 +436,92 @@ export default function People() {
               icon="✓"
               title="Todo al dia"
               description="No hay solicitudes pendientes. Cuando alguien te pida seguirte, aparecera aca."
+            />
+          )}
+        </>
+      )}
+
+      {/* Invite tab */}
+      {tab === 'invite' && (
+        <>
+          <div className="info-card" style={{ marginBottom: 16 }}>
+            Genera codigos de invitacion para que tus amigos puedan registrarse en La Estanteria.
+          </div>
+
+          <button onClick={handleGenerateCode} className="btn btn-primary" style={{ marginBottom: 16 }}>
+            Generar codigo
+          </button>
+
+          {generatedCode && (
+            <div style={{
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+              padding: 16,
+              marginBottom: 16,
+              textAlign: 'center',
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                Nuevo codigo generado:
+              </div>
+              <div style={{
+                fontFamily: 'monospace',
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: 4,
+                color: 'var(--accent)',
+                marginBottom: 12,
+              }}>
+                {generatedCode}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <button
+                  onClick={() => copyToClipboard(generatedCode)}
+                  className="btn btn-secondary"
+                  style={{ fontSize: 12 }}
+                >
+                  Copiar
+                </button>
+                <button
+                  onClick={() => shareWhatsApp(generatedCode)}
+                  className="btn btn-secondary"
+                  style={{ fontSize: 12 }}
+                >
+                  Compartir por WhatsApp
+                </button>
+              </div>
+            </div>
+          )}
+
+          {inviteCodes.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {inviteCodes.map((ic) => (
+                <div
+                  key={ic.code}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'var(--surface)',
+                    borderRadius: 'var(--radius)',
+                    padding: '8px 12px',
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{ic.code}</span>
+                  <span style={{ color: ic.usedBy ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {ic.usedBy ? 'Usado' : 'Disponible'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {inviteCodes.length === 0 && !generatedCode && (
+            <EmptyState
+              icon="🎁"
+              title="No generaste codigos todavia"
+              description="Genera un codigo y compartilo con tus amigos para que se unan."
             />
           )}
         </>

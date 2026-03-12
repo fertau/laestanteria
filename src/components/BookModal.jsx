@@ -29,7 +29,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function BookModal({ book, onClose }) {
-  const { user } = useAuth();
+  const { user, profile, getAccessToken } = useAuth();
   const { deleteBook } = useBooks();
   const { collections, addBookToCollection, removeBookFromCollection } = useCollections();
   const { canDownloadFrom } = useFollows();
@@ -114,8 +114,10 @@ export default function BookModal({ book, onClose }) {
         epubBase64: base64,
       });
       toast('Libro enviado a tu Kindle!', 'success');
-    } catch {
-      toast('Error al enviar a Kindle', 'error');
+    } catch (err) {
+      const msg = err?.message || err?.details || 'Error desconocido';
+      console.error('sendToKindle error:', err);
+      toast(`Error al enviar a Kindle: ${msg}`, 'error');
     } finally {
       setSendingKindle(false);
     }

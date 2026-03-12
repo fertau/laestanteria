@@ -7,13 +7,13 @@ import { useBooks } from '../hooks/useBooks';
 import { useFollows } from '../hooks/useFollows';
 import { useAllReadingStatuses } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
-import BookGrid from '../components/BookGrid';
 import BookCard from '../components/BookCard';
 import BookModal from '../components/BookModal';
+import { Upload, BookOpen, BookMarked, Star, Layers, Settings, Tablet, Shield, HelpCircle } from 'lucide-react';
 
 export default function Profile() {
   const { uid } = useParams();
-  const { user, profile, updateProfile, generateInviteCode, getMyInviteCodes } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   const { books } = useBooks();
   const { following, followers } = useFollows();
   const { wantToRead, reading, finished } = useAllReadingStatuses();
@@ -22,17 +22,13 @@ export default function Profile() {
 
   const [profileData, setProfileData] = useState(null);
   const [kindleEmail, setKindleEmail] = useState('');
-  const [inviteCodes, setInviteCodes] = useState([]);
-  const [generatedCode, setGeneratedCode] = useState(null);
   const [selectedBook, setSelectedBook] = useState(null);
 
-  // Books uploaded by this user
   const myBooks = useMemo(
     () => books.filter((b) => b.uploadedBy?.uid === uid),
     [books, uid]
   );
 
-  // Reading status books (resolve IDs to book objects)
   const wantBooks = useMemo(
     () => wantToRead.map((id) => books.find((b) => b.id === id)).filter(Boolean),
     [wantToRead, books]
@@ -46,6 +42,12 @@ export default function Profile() {
     [finished, books]
   );
 
+  // Books that user has rated
+  const ratedBooks = useMemo(
+    () => books.filter((b) => b.ratings && b.ratings[uid]),
+    [books, uid]
+  );
+
   useEffect(() => {
     if (isOwnProfile && profile) {
       setProfileData(profile);
@@ -57,12 +59,6 @@ export default function Profile() {
     }
   }, [uid, isOwnProfile, profile]);
 
-  useEffect(() => {
-    if (isOwnProfile) {
-      getMyInviteCodes().then(setInviteCodes);
-    }
-  }, [isOwnProfile, getMyInviteCodes]);
-
   const handleSaveKindle = async () => {
     if (kindleEmail && !kindleEmail.endsWith('@kindle.com')) {
       toast('El email debe terminar en @kindle.com', 'error');
@@ -72,30 +68,6 @@ export default function Profile() {
     toast('Email Kindle guardado', 'success');
   };
 
-  const handleGenerateCode = async () => {
-    try {
-      const code = await generateInviteCode();
-      setGeneratedCode(code);
-      setInviteCodes((prev) => [
-        { code, generatedBy: user.uid, usedBy: null, createdAt: new Date() },
-        ...prev,
-      ]);
-      toast('Codigo generado!', 'success');
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    toast('Copiado al portapapeles', 'info');
-  };
-
-  const shareWhatsApp = (code) => {
-    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-    const text = `Te invito a La estanteria! Usa este codigo para registrarte: ${code}\n${appUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-  };
 
   if (!profileData) {
     return (
@@ -109,36 +81,36 @@ export default function Profile() {
 
   return (
     <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 32 }}>
+      {/* ═══ Mi Perfil ═══ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 28 }}>
         {profileData.avatar ? (
           <img
             src={profileData.avatar}
             alt=""
-            style={{ width: 72, height: 72, borderRadius: '50%' }}
+            style={{ width: 64, height: 64, borderRadius: '50%' }}
             referrerPolicy="no-referrer"
           />
         ) : (
           <div style={{
-            width: 72,
-            height: 72,
+            width: 64,
+            height: 64,
             borderRadius: '50%',
             background: 'var(--accent)',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 28,
+            fontSize: 24,
             fontWeight: 700,
           }}>
             {(profileData.displayName || '?')[0].toUpperCase()}
           </div>
         )}
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 2 }}>
             {profileData.displayName}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{profileData.email}</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{profileData.email}</p>
         </div>
       </div>
 
@@ -161,21 +133,85 @@ export default function Profile() {
         )}
       </div>
 
-      {/* Own profile: Kindle + Privacy settings (above books for visibility) */}
+
       {isOwnProfile && (
         <>
-          {/* Kindle config */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 className="section-title">
-              <span>Configuracion Kindle</span>
-              <Link to="/tutorial" className="section-link">Ver tutorial →</Link>
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
-              Para recibir libros en tu Kindle, ingresa tu direccion @kindle.com y autoriza el remitente en{' '}
+          {/* ═══ Mis Libros ═══ */}
+          <h2 className="section-title" style={{ marginBottom: 12 }}>Mis libros</h2>
+
+          {/* Book category rows */}
+          <BookRow
+            icon={Upload}
+            label="Agregados"
+            count={myBooks.length}
+            books={myBooks}
+            onBookClick={setSelectedBook}
+            linkTo="/catalog"
+          />
+          <BookRow
+            icon={BookOpen}
+            label="Leyendo"
+            count={readingBooks.length}
+            books={readingBooks}
+            onBookClick={setSelectedBook}
+            linkTo="/catalog"
+          />
+          <BookRow
+            icon={BookMarked}
+            label="Quiero leer"
+            count={wantBooks.length}
+            books={wantBooks}
+            onBookClick={setSelectedBook}
+            linkTo="/catalog"
+          />
+          <BookRow
+            icon={Star}
+            label="Leidos"
+            count={finishedBooks.length}
+            books={finishedBooks}
+            onBookClick={setSelectedBook}
+            linkTo="/catalog"
+          />
+          <BookRow
+            icon={Layers}
+            label="Colecciones"
+            count={null}
+            books={[]}
+            onBookClick={setSelectedBook}
+            linkTo="/collections"
+            linkLabel="Ver colecciones →"
+          />
+
+          <div className="divider" />
+
+          {/* ═══ Configuraciones ═══ */}
+          <h2 className="section-title" style={{ marginBottom: 12 }}>
+            <span>Configuraciones</span>
+            <Link to="/tutorial" className="section-link">
+              <HelpCircle size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+              Tutorial
+            </Link>
+          </h2>
+
+          {/* Kindle */}
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius)',
+            padding: '14px 16px',
+            marginBottom: 10,
+            border: '1px solid var(--border)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Tablet size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Email Kindle</div>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
+              Tu direccion @kindle.com para recibir libros. Autoriza el remitente{' '}
+              <strong style={{ color: 'var(--text)' }}>ticher@gmail.com</strong> en{' '}
               <a href="https://www.amazon.com/mycd" target="_blank" rel="noopener noreferrer">
                 amazon.com/mycd
-              </a>
-              {' '}→ Preferences → Approved Personal Document E-mail List.
+              </a>{' '}
+              → Preferences → Approved Personal Document E-mail List.
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
@@ -183,187 +219,118 @@ export default function Profile() {
                 value={kindleEmail}
                 onChange={(e) => setKindleEmail(e.target.value)}
                 placeholder="tu-email@kindle.com"
-                style={{ flex: 1 }}
+                style={{ flex: 1, fontSize: 13 }}
               />
-              <button onClick={handleSaveKindle} className="btn btn-primary">
+              <button onClick={handleSaveKindle} className="btn btn-primary" style={{ fontSize: 13 }}>
                 Guardar
               </button>
             </div>
           </div>
 
-          {/* Privacy mode */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 className="section-title">Privacidad</h2>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'var(--surface)',
-              borderRadius: 'var(--radius)',
-              padding: '12px 16px',
-            }}>
+          {/* Privacy */}
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius)',
+            padding: '14px 16px',
+            marginBottom: 10,
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <Shield size={16} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>
                   Modo {profile.privacyMode === 'open' ? 'abierto' : 'cerrado'}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>
                   {profile.privacyMode === 'open'
                     ? 'Nuevos seguidores ven tu actividad automaticamente'
                     : 'Aprobas cada solicitud y elegis que compartir'}
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  updateProfile({
-                    privacyMode: profile.privacyMode === 'open' ? 'closed' : 'open',
-                  })
-                }
-                className="btn btn-secondary"
-                style={{ fontSize: 12 }}
-              >
-                Cambiar a {profile.privacyMode === 'open' ? 'cerrado' : 'abierto'}
-              </button>
             </div>
-          </div>
-
-          <div className="divider" />
-        </>
-      )}
-
-      {/* My uploaded books */}
-      {myBooks.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Mis libros</h2>
-          <BookGrid books={myBooks} onBookClick={setSelectedBook} />
-        </section>
-      )}
-
-      {/* Reading status sections (own profile only) — horizontal rows */}
-      {isOwnProfile && readingBooks.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <div className="section-title">
-            <span>Leyendo</span>
-            <Link to="/catalog" className="section-link">Ver mas ({readingBooks.length}) →</Link>
-          </div>
-          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
-            {readingBooks.slice(0, 6).map((book) => (
-              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
-                <BookCard book={book} onClick={setSelectedBook} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {isOwnProfile && wantBooks.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <div className="section-title">
-            <span>Quiero leer</span>
-            <Link to="/catalog" className="section-link">Ver mas ({wantBooks.length}) →</Link>
-          </div>
-          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
-            {wantBooks.slice(0, 6).map((book) => (
-              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
-                <BookCard book={book} onClick={setSelectedBook} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {isOwnProfile && finishedBooks.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <div className="section-title">
-            <span>Leidos</span>
-            <Link to="/catalog" className="section-link">Ver mas ({finishedBooks.length}) →</Link>
-          </div>
-          <div className="horizontal-scroll" style={{ paddingBottom: 4 }}>
-            {finishedBooks.slice(0, 6).map((book) => (
-              <div key={book.id} style={{ flex: '0 0 130px', maxWidth: 130 }}>
-                <BookCard book={book} onClick={setSelectedBook} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Invite codes (own profile, bottom section) */}
-      {isOwnProfile && (
-        <>
-          <div className="divider" />
-          <div style={{ marginBottom: 32 }}>
-            <h2 className="section-title">Codigos de invitacion</h2>
-            <button onClick={handleGenerateCode} className="btn btn-primary" style={{ marginBottom: 16 }}>
-              Generar codigo
+            <button
+              onClick={() =>
+                updateProfile({
+                  privacyMode: profile.privacyMode === 'open' ? 'closed' : 'open',
+                })
+              }
+              className="btn btn-secondary"
+              style={{ fontSize: 12, flexShrink: 0 }}
+            >
+              Cambiar
             </button>
-
-            {generatedCode && (
-              <div style={{
-                background: 'var(--surface)',
-                borderRadius: 'var(--radius)',
-                padding: 16,
-                marginBottom: 16,
-                textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                  Nuevo codigo generado:
-                </div>
-                <div style={{
-                  fontFamily: 'monospace',
-                  fontSize: 28,
-                  fontWeight: 700,
-                  letterSpacing: 4,
-                  color: 'var(--accent)',
-                  marginBottom: 12,
-                }}>
-                  {generatedCode}
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                  <button
-                    onClick={() => copyToClipboard(generatedCode)}
-                    className="btn btn-secondary"
-                    style={{ fontSize: 12 }}
-                  >
-                    Copiar
-                  </button>
-                  <button
-                    onClick={() => shareWhatsApp(generatedCode)}
-                    className="btn btn-secondary"
-                    style={{ fontSize: 12 }}
-                  >
-                    Compartir por WhatsApp
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {inviteCodes.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {inviteCodes.map((ic) => (
-                  <div
-                    key={ic.code}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: 'var(--surface)',
-                      borderRadius: 'var(--radius)',
-                      padding: '8px 12px',
-                      fontSize: 13,
-                    }}
-                  >
-                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{ic.code}</span>
-                    <span style={{ color: ic.usedBy ? 'var(--success)' : 'var(--text-muted)' }}>
-                      {ic.usedBy ? 'Usado' : 'Disponible'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
+
         </>
       )}
+
+      {/* Other user's profile — just show uploaded count */}
+      {!isOwnProfile && myBooks.length > 0 && (
+        <BookRow
+          icon={Upload}
+          label="Libros agregados"
+          count={myBooks.length}
+          books={myBooks}
+          onBookClick={setSelectedBook}
+          linkTo="/catalog"
+        />
+      )}
+
       {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
+    </div>
+  );
+}
+
+/* ── BookRow: one-line preview with horizontal scroll + "Ver más" ── */
+function BookRow({ icon: Icon, label, count, books, onBookClick, linkTo, linkLabel }) {
+  const hasBooks = books.length > 0;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {/* Header row */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: hasBooks ? 8 : 0,
+        padding: hasBooks ? 0 : '10px 0',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Icon size={16} style={{ color: 'var(--accent)' }} />
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
+          {count !== null && (
+            <span style={{
+              fontSize: 12,
+              color: 'var(--text-dim)',
+              background: 'var(--surface)',
+              padding: '2px 8px',
+              borderRadius: 10,
+            }}>
+              {count}
+            </span>
+          )}
+        </div>
+        {(hasBooks || linkLabel) && (
+          <Link to={linkTo} style={{ fontSize: 12, color: 'var(--accent)' }}>
+            {linkLabel || `Ver mas →`}
+          </Link>
+        )}
+      </div>
+
+      {/* Horizontal scroll of books (max 6) */}
+      {hasBooks && (
+        <div className="horizontal-scroll">
+          {books.slice(0, 6).map((book) => (
+            <div key={book.id} style={{ flex: '0 0 100px', maxWidth: 100 }}>
+              <BookCard book={book} onClick={onBookClick} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -373,12 +340,11 @@ function MiniStat({ label, value }) {
     <div style={{
       background: 'var(--surface)',
       borderRadius: 'var(--radius)',
-      padding: '12px 8px',
+      padding: '10px 12px',
       textAlign: 'center',
+      border: '1px solid var(--border)',
     }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
-        {value}
-      </div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
     </div>
   );
