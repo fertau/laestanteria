@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useBooks } from '../hooks/useBooks';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import HelpTip from '../components/HelpTip';
 import BookGrid from '../components/BookGrid';
 import BookModal from '../components/BookModal';
 import UploadModal from '../components/UploadModal';
@@ -197,13 +198,15 @@ export default function Catalog() {
                 className="btn btn-primary"
                 onClick={() => setShowUpload(true)}
               >
-                + Subir libro
+                + Agregar libro
+                <HelpTip text="Agrega un EPUB desde tu dispositivo. Se guarda localmente en tu navegador." position="bottom" />
               </button>
               <button
                 className="btn btn-secondary"
                 onClick={() => setShowImport(true)}
               >
                 Importar
+                <HelpTip text="Importa multiples EPUBs o una biblioteca Calibre de una sola vez." position="bottom" />
               </button>
               {books.some((b) => b.uploadedBy?.uid === user?.uid) && (
                 <Link
@@ -322,13 +325,13 @@ export default function Catalog() {
         }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>Estanteria vacia</div>
           <p style={{ marginBottom: 16 }}>
-            Subi tu primer libro o segui a alguien para ver su biblioteca.
+            Agrega tu primer libro o segui a alguien para ver su biblioteca.
           </p>
           <button
             className="btn btn-primary"
             onClick={() => setShowUpload(true)}
           >
-            + Subir tu primer libro
+            + Agregar tu primer libro
           </button>
         </div>
       )}

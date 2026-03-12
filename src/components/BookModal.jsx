@@ -13,6 +13,7 @@ import { functions } from '../lib/firebase';
 import { getEpub, hasEpub } from '../lib/localStore';
 import Stars from './Stars';
 import Avatar from './Avatar';
+import HelpTip from './HelpTip';
 import EditBookModal from './EditBookModal';
 
 const langLabels = {
@@ -319,7 +320,7 @@ export default function BookModal({ book, onClose }) {
               {/* Uploader */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
                 <Avatar src={null} name={book.uploadedBy?.displayName} size={20} />
-                <span>Subido por {book.uploadedBy?.displayName}</span>
+                <span>Agregado por {book.uploadedBy?.displayName}</span>
               </div>
             </div>
           </div>
@@ -444,6 +445,7 @@ export default function BookModal({ book, onClose }) {
                   style={{ fontSize: 13 }}
                 >
                   {sendingKindle ? 'Enviando...' : 'Enviar a mi Kindle'}
+                  <HelpTip text="Envia el EPUB desde tu navegador directo a tu Kindle via email. El archivo nunca se almacena en la nube." size={13} />
                 </button>
               )}
 
@@ -456,6 +458,7 @@ export default function BookModal({ book, onClose }) {
                   style={{ fontSize: 13 }}
                 >
                   {requesting ? 'Enviando pedido...' : 'Pedir a mi Kindle'}
+                  <HelpTip text="Le envias un pedido al dueno del libro. Cuando lo apruebe, el libro se envia directo a tu Kindle." size={13} />
                 </button>
               )}
 
@@ -468,6 +471,7 @@ export default function BookModal({ book, onClose }) {
                   style={{ fontSize: 13 }}
                 >
                   {requesting ? 'Enviando pedido...' : 'Pedir a mi Kindle'}
+                  <HelpTip text="Le envias un pedido al dueno del libro. Cuando lo apruebe, el libro se envia directo a tu Kindle." size={13} />
                 </button>
               )}
 
@@ -475,6 +479,7 @@ export default function BookModal({ book, onClose }) {
               {!isOwner && !isBonded && !canDownload && (
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
                   Necesitas un vinculo activo para pedir este libro.
+                  <HelpTip text="Para pedir libros, primero crea un vinculo con esta persona desde la seccion Personas. Ambos deben compartir su email @kindle.com." />
                 </div>
               )}
 

@@ -9,6 +9,7 @@ import { useToast } from '../hooks/useToast';
 import Avatar from '../components/Avatar';
 import BondSetup, { BondAccept } from '../components/BondSetup';
 import { Users, UserPlus, UserCheck, Clock, Link2 } from 'lucide-react';
+import HelpTip from '../components/HelpTip';
 
 export default function People() {
   const { user, profile } = useAuth();
@@ -153,7 +154,7 @@ export default function People() {
         <>
           <div className="info-card" style={{ marginBottom: 16 }}>
             Los vinculos te permiten compartir tu catalogo y enviar libros directamente al Kindle de tus amigos.
-            Ambos deben compartir su email @kindle.com para activar el vinculo.
+            <HelpTip text="Un vinculo requiere que ambos compartan su email @kindle.com y habiliten el remitente en Amazon. Asi se aseguran de poder enviarse libros mutuamente." />
           </div>
 
           {activeBonds.length === 0 && pendingBonds.length === 0 && (
@@ -241,7 +242,7 @@ export default function People() {
       {tab === 'directory' && (
         <>
           <div className="info-card" style={{ marginBottom: 16 }}>
-            Estas son las personas registradas en La Estanteria. Seguilas para ver su actividad y, si te dan acceso, descargar sus libros.
+            Estas son las personas registradas en La Estanteria. Seguilas para ver su actividad y, si crean un vinculo, pedir libros a su Kindle.
           </div>
           <input
             value={search}
@@ -278,8 +279,8 @@ export default function People() {
         <>
           <div className="info-card" style={{ marginBottom: 16 }}>
             <strong style={{ color: 'var(--text)' }}>Niveles de acceso:</strong><br/>
-            <span style={{ color: 'var(--accent)' }}>Actividad</span> — ves cuando suben o leen libros<br/>
-            <span style={{ color: 'var(--success)' }}>Biblioteca</span> — ademas podes descargar sus libros a tu Kindle
+            <span style={{ color: 'var(--accent)' }}>Actividad</span> — ves cuando agregan o leen libros<br/>
+            <span style={{ color: 'var(--success)' }}>Biblioteca</span> — ademas podes pedirles libros a tu Kindle
           </div>
           {following.length === 0 ? (
             <EmptyState
@@ -312,7 +313,7 @@ export default function People() {
       {tab === 'followers' && (
         <>
           <div className="info-card" style={{ marginBottom: 16 }}>
-            Podes elegir que nivel de acceso dar a cada seguidor. <strong style={{ color: 'var(--text)' }}>Actividad</strong> = solo ven tu actividad. <strong style={{ color: 'var(--text)' }}>Biblioteca</strong> = pueden descargar tus libros.
+            Podes elegir que nivel de acceso dar a cada seguidor. <strong style={{ color: 'var(--text)' }}>Actividad</strong> = solo ven tu actividad. <strong style={{ color: 'var(--text)' }}>Biblioteca</strong> = pueden pedirte libros a su Kindle.
           </div>
           {followers.length === 0 ? (
             <EmptyState
@@ -599,7 +600,7 @@ function PendingInRow({ user, follow, onAccept, onReject }) {
           </div>
           {!isUpgrade && (
             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
-              Actividad = ve tu actividad · Biblioteca = puede descargar tus libros
+              Actividad = ve tu actividad · Biblioteca = puede pedirte libros
             </div>
           )}
         </div>

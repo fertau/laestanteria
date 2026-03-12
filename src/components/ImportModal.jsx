@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { detectCalibreStructure } from '../lib/calibreParser';
 import { buildQueue, processQueueItem } from '../lib/importQueue';
+import HelpTip from './HelpTip';
 
 /**
  * ImportModal — Bulk import with 4 phases:
@@ -214,8 +215,8 @@ export default function ImportModal({ onClose }) {
           marginBottom: 20,
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
-            {phase === 'done' ? 'Importación completa' :
-              phase === 'processing' ? 'Importando...' : 'Importar libros'}
+            {phase === 'done' ? 'Importacion completa' :
+              phase === 'processing' ? 'Importando...' : <>Importar libros <HelpTip text="Selecciona multiples EPUBs o una carpeta de Calibre. Los archivos se guardan en tu navegador, nunca en la nube." size={16} position="bottom" /></>}
           </h2>
           {phase !== 'processing' && (
             <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
@@ -360,7 +361,7 @@ export default function ImportModal({ onClose }) {
                   Cancelar
                 </button>
                 <button className="btn btn-primary" onClick={startProcessing}>
-                  Comenzar importación
+                  Comenzar importacion
                 </button>
               </div>
             )}
@@ -488,7 +489,7 @@ export default function ImportModal({ onClose }) {
                 onClick={handleCancel}
                 disabled={cancelledRef.current}
               >
-                {cancelledRef.current ? 'Cancelando...' : 'Cancelar importación'}
+                {cancelledRef.current ? 'Cancelando...' : 'Cancelar importacion'}
               </button>
             </div>
           </div>

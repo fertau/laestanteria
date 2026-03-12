@@ -149,7 +149,7 @@ export default function Profile() {
         gap: 8,
         marginBottom: 32,
       }}>
-        <MiniStat label="Subidos" value={myBooks.length} />
+        <MiniStat label="Agregados" value={myBooks.length} />
         {isOwnProfile && (
           <>
             <MiniStat label="Quiero leer" value={wantToRead.length} />
@@ -233,7 +233,7 @@ export default function Profile() {
       {/* My uploaded books */}
       {myBooks.length > 0 && (
         <section style={{ marginBottom: 32 }}>
-          <h2 className="section-title">Libros subidos</h2>
+          <h2 className="section-title">Mis libros</h2>
           <BookGrid books={myBooks} onBookClick={setSelectedBook} />
         </section>
       )}

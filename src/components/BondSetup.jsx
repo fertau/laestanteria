@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
+import HelpTip from './HelpTip';
 
 /**
  * Modal for creating a new bond with another user.
@@ -76,6 +77,7 @@ export default function BondSetup({ targetUser, onClose }) {
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
               Tu email de Kindle
+              <HelpTip text="Lo encontras en amazon.com/mycd → Devices → selecciona tu Kindle o la app. Es algo como nombre_XXXXX@kindle.com" />
             </label>
             <input
               type="email"
