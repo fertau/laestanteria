@@ -14,25 +14,25 @@ import {
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
 import { useFollows } from './useFollows';
-import {
-  getOrCreateFolder,
-  uploadEpubToDrive,
-  shareWithServiceAccount,
-} from '../lib/googleDrive';
+import { useBonds } from './useBonds';
+import { saveEpub, deleteEpub } from '../lib/localStore';
 
 export function useBooks() {
-  const { user, profile, getAccessToken } = useAuth();
+  const { user, profile } = useAuth();
   const { libraryFollowingUids } = useFollows();
+  const { bondedUids } = useBonds();
   const uid = user?.uid;
 
   const [allBooks, setAllBooks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Build the list of UIDs whose books I can see
+  // Build the list of UIDs whose books I can see:
+  // myself + library follows (legacy) + bonded users
   const visibleUids = useMemo(() => {
     if (!uid) return [];
-    return [uid, ...libraryFollowingUids];
-  }, [uid, libraryFollowingUids]);
+    const uids = new Set([uid, ...libraryFollowingUids, ...bondedUids]);
+    return [...uids];
+  }, [uid, libraryFollowingUids, bondedUids]);
 
   // Listen to books from visible users
   // Firestore 'in' supports up to 30 values — sufficient for small group
@@ -54,38 +54,17 @@ export function useBooks() {
     });
   }, [uid, visibleUids]);
 
-  // Upload a book
+  // Upload a book — saves EPUB locally (OPFS/IndexedDB) and metadata to Firestore
   const uploadBook = useCallback(
     async (file, metadata, onProgress) => {
       if (!uid || !profile) throw new Error('No autenticado');
 
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error('No se pudo obtener acceso a Google Drive. Volve a iniciar sesion.');
+      // 1. Save EPUB to local storage (OPFS or IndexedDB)
+      if (onProgress) onProgress(10);
+      await saveEpub(metadata.fileHash, file);
+      if (onProgress) onProgress(50);
 
-      // 1. Get or create the folder
-      const folderId = await getOrCreateFolder(accessToken);
-
-      // 2. Upload to Drive
-      const title = `${metadata.author} - ${metadata.title}`;
-      const { driveFileId } = await uploadEpubToDrive(
-        accessToken,
-        file,
-        title,
-        folderId,
-        onProgress
-      );
-
-      // 3. Share with service account (so Cloud Functions can access it)
-      const saEmail = import.meta.env.VITE_SERVICE_ACCOUNT_EMAIL;
-      if (saEmail) {
-        try {
-          await shareWithServiceAccount(accessToken, driveFileId, saEmail);
-        } catch (err) {
-          console.warn('Could not share with service account:', err.message);
-        }
-      }
-
-      // 4. Write metadata to Firestore
+      // 2. Write metadata to Firestore
       const bookDoc = await addDoc(collection(db, 'books'), {
         title: metadata.title,
         author: metadata.author,
@@ -93,8 +72,6 @@ export function useBooks() {
         language: metadata.language || 'es',
         description: metadata.description || '',
         coverUrl: metadata.coverUrl || '',
-        driveFileId,
-        driveOwnerUid: uid,
         fileHash: metadata.fileHash,
         isbn: metadata.isbn || null,
         bookGroupId: metadata.bookGroupId || null,
@@ -108,9 +85,10 @@ export function useBooks() {
         ratingCount: 0,
       });
 
+      if (onProgress) onProgress(100);
       return bookDoc.id;
     },
-    [uid, profile, getAccessToken]
+    [uid, profile]
   );
 
   // Update a book's metadata (only the uploader — enforced client-side)
@@ -121,12 +99,16 @@ export function useBooks() {
     []
   );
 
-  // Delete a book (only the uploader)
+  // Delete a book (only the uploader) — also removes local EPUB
   const deleteBook = useCallback(
     async (bookId) => {
+      const book = allBooks.find((b) => b.id === bookId);
+      if (book?.fileHash) {
+        try { await deleteEpub(book.fileHash); } catch { /* ignore */ }
+      }
       await deleteDoc(doc(db, 'books', bookId));
     },
-    []
+    [allBooks]
   );
 
   // Bulk delete books (atomic via writeBatch, up to 500 per batch)
@@ -151,6 +133,6 @@ export function useBooks() {
     updateBook,
     deleteBook,
     deleteBooks,
-    hasFollows: libraryFollowingUids.length > 0,
+    hasFollows: libraryFollowingUids.length > 0 || bondedUids.length > 0,
   };
 }

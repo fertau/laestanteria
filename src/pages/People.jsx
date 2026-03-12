@@ -4,9 +4,11 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useFollows } from '../hooks/useFollows';
+import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
 import Avatar from '../components/Avatar';
-import { Users, UserPlus, UserCheck, Clock } from 'lucide-react';
+import BondSetup, { BondAccept } from '../components/BondSetup';
+import { Users, UserPlus, UserCheck, Clock, Link2 } from 'lucide-react';
 
 export default function People() {
   const { user, profile } = useAuth();
@@ -23,12 +25,14 @@ export default function People() {
     changeAccessLevel,
     removeFollower,
   } = useFollows();
+  const { activeBonds, pendingBonds, getBondStatus, removeBond } = useBonds();
   const { toast } = useToast();
 
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('directory');
+  const [tab, setTab] = useState('bonds');
+  const [bondTarget, setBondTarget] = useState(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -98,10 +102,11 @@ export default function People() {
   }
 
   const tabs = [
+    { key: 'bonds', label: `Vinculos (${activeBonds.length})`, icon: Link2 },
     { key: 'directory', label: 'Directorio', icon: Users },
     { key: 'following', label: `Siguiendo (${following.length})`, icon: UserPlus },
     { key: 'followers', label: `Seguidores (${followers.length})`, icon: UserCheck },
-    { key: 'pending', label: pendingIn.length > 0 ? `Pendientes (${pendingIn.length})` : 'Pendientes', icon: Clock },
+    { key: 'pending', label: pendingIn.length > 0 || pendingBonds.length > 0 ? `Pendientes (${pendingIn.length + pendingBonds.length})` : 'Pendientes', icon: Clock },
   ];
 
   return (
@@ -143,6 +148,95 @@ export default function People() {
         })}
       </div>
 
+      {/* Bonds tab */}
+      {tab === 'bonds' && (
+        <>
+          <div className="info-card" style={{ marginBottom: 16 }}>
+            Los vinculos te permiten compartir tu catalogo y enviar libros directamente al Kindle de tus amigos.
+            Ambos deben compartir su email @kindle.com para activar el vinculo.
+          </div>
+
+          {activeBonds.length === 0 && pendingBonds.length === 0 && (
+            <EmptyState
+              icon="🔗"
+              title="Sin vinculos todavia"
+              description="Busca en el Directorio y crea un vinculo con alguien para compartir libros."
+              actionLabel="Ir al Directorio"
+              onAction={() => setTab('directory')}
+            />
+          )}
+
+          {activeBonds.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h3 className="section-title">Vinculos activos</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {activeBonds.map((b) => {
+                  const u = allUsers.find((u) => u.uid === b.peerUid);
+                  return (
+                    <div key={b.id} style={rowStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Avatar src={u?.avatar} name={b.peerName} size={36} />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{b.peerName}</div>
+                          <div style={{ fontSize: 12, color: 'var(--success)' }}>
+                            Vinculo activo · Kindle: {b.peerKindleEmail}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 12, color: 'var(--danger)' }}
+                        onClick={() => removeBond(b.id)}
+                      >
+                        Desvincular
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {pendingBonds.length > 0 && (
+            <div>
+              <h3 className="section-title">Vinculos pendientes</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {pendingBonds.map((b) => {
+                  const u = allUsers.find((u) => u.uid === b.peerUid);
+                  return (
+                    <div key={b.id} style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                        <Avatar src={u?.avatar} name={b.peerName} size={36} />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{b.peerName}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {b.iAmInitiator
+                              ? 'Esperando que acepte el vinculo'
+                              : 'Te invito a vincularte — ingresa tu email Kindle'}
+                          </div>
+                        </div>
+                      </div>
+                      {!b.iAmInitiator && (
+                        <BondAccept bond={b} />
+                      )}
+                      {b.iAmInitiator && (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: 12, alignSelf: 'flex-end' }}
+                          onClick={() => removeBond(b.id)}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Directory tab */}
       {tab === 'directory' && (
         <>
@@ -168,8 +262,10 @@ export default function People() {
                   key={u.uid}
                   targetUser={u}
                   followStatus={getFollowStatus(u.uid)}
+                  bondStatus={getBondStatus(u.uid).status}
                   onFollow={() => handleFollow(u)}
                   onUnfollow={() => handleUnfollow(u.uid)}
+                  onBond={() => setBondTarget(u)}
                 />
               ))}
             </div>
@@ -311,6 +407,10 @@ export default function People() {
           )}
         </>
       )}
+
+      {bondTarget && (
+        <BondSetup targetUser={bondTarget} onClose={() => setBondTarget(null)} />
+      )}
     </div>
   );
 }
@@ -363,7 +463,7 @@ function AccessDot({ level }) {
   );
 }
 
-function UserRow({ targetUser, followStatus, onFollow, onUnfollow }) {
+function UserRow({ targetUser, followStatus, onFollow, onUnfollow, onBond, bondStatus }) {
   const { status } = followStatus;
 
   return (
@@ -375,10 +475,29 @@ function UserRow({ targetUser, followStatus, onFollow, onUnfollow }) {
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{targetUser.email}</div>
         </div>
       </div>
-      <div>
-        {status === 'none' && (
+      <div style={{ display: 'flex', gap: 6 }}>
+        {bondStatus === 'none' && (
           <button
             className="btn btn-primary"
+            style={{ fontSize: 12, padding: '5px 12px' }}
+            onClick={onBond}
+          >
+            Vincular
+          </button>
+        )}
+        {bondStatus === 'pending' && (
+          <span style={{ fontSize: 12, color: 'var(--accent)', padding: '5px 8px' }}>
+            Vinculo pendiente
+          </span>
+        )}
+        {bondStatus === 'active' && (
+          <span style={{ fontSize: 12, color: 'var(--success)', padding: '5px 8px' }}>
+            Vinculado
+          </span>
+        )}
+        {status === 'none' && (
+          <button
+            className="btn btn-secondary"
             style={{ fontSize: 12, padding: '5px 14px' }}
             onClick={onFollow}
           >

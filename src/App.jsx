@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { FollowsProvider } from './hooks/useFollows';
+import { BondsProvider } from './hooks/useBonds';
 import { ToastProvider } from './hooks/useToast';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -17,6 +18,7 @@ import CollectionDetail from './pages/CollectionDetail';
 import Stats from './pages/Stats';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
+import Requests from './pages/Requests';
 import BatchUpdate from './pages/BatchUpdate';
 import Tutorial from './pages/Tutorial';
 
@@ -25,6 +27,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <FollowsProvider>
+        <BondsProvider>
         <ToastProvider>
           <Header />
           <Routes>
@@ -39,11 +42,13 @@ export default function App() {
             <Route path="/stats" element={<PrivateRoute><Stats /></PrivateRoute>} />
             <Route path="/profile/:uid" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+            <Route path="/requests" element={<PrivateRoute><Requests /></PrivateRoute>} />
             <Route path="/tutorial" element={<PrivateRoute><Tutorial /></PrivateRoute>} />
           </Routes>
           <BottomNav />
           <ToastContainer />
         </ToastProvider>
+        </BondsProvider>
         </FollowsProvider>
       </AuthProvider>
     </BrowserRouter>

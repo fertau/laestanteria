@@ -18,6 +18,3 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const googleProvider = new GoogleAuthProvider();
-
-// Add Drive scope to Google OAuth
-googleProvider.addScope('https://www.googleapis.com/auth/drive.file');

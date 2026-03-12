@@ -3,7 +3,6 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut as fbSignOut,
-  GoogleAuthProvider,
 } from 'firebase/auth';
 import {
   doc,
@@ -22,26 +21,6 @@ import { auth, db, googleProvider } from '../lib/firebase';
 const AuthContext = createContext(null);
 
 /**
- * Extract Google OAuth access token from a Firebase sign-in result.
- * Uses the official GoogleAuthProvider API (not internal _tokenResponse).
- */
-function extractAccessToken(result) {
-  // Method 1: Official API (preferred)
-  try {
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) return credential.accessToken;
-  } catch {
-    // Fall through to method 2
-  }
-
-  // Method 2: Internal field (fallback for older Firebase versions)
-  const token = result?._tokenResponse?.oauthAccessToken;
-  if (token) return token;
-
-  return null;
-}
-
-/**
  * Auth states:
  * - user === undefined → loading
  * - user === null → no session → Login
@@ -52,13 +31,12 @@ export function AuthProvider({ children }) {
   const [state, setState] = useState({
     user: undefined, // undefined = loading
     profile: null,
-    accessToken: null, // Google OAuth access token for Drive
   });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
-        setState({ user: null, profile: null, accessToken: null });
+        setState({ user: null, profile: null });
         return;
       }
 
@@ -66,26 +44,23 @@ export function AuthProvider({ children }) {
       try {
         const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (profileDoc.exists()) {
-          setState((prev) => ({
+          setState({
             user: firebaseUser,
             profile: { id: profileDoc.id, ...profileDoc.data() },
-            accessToken: prev.accessToken, // Preserve existing token
-          }));
+          });
         } else {
           // Authenticated but no profile — needs invite code
-          setState((prev) => ({
+          setState({
             user: firebaseUser,
             profile: null,
-            accessToken: prev.accessToken,
-          }));
+          });
         }
       } catch (err) {
         console.error('Error checking profile:', err);
-        setState((prev) => ({
+        setState({
           user: firebaseUser,
           profile: null,
-          accessToken: prev.accessToken,
-        }));
+        });
       }
     });
     return unsub;
@@ -94,10 +69,6 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const oauthToken = extractAccessToken(result);
-      if (oauthToken) {
-        setState((prev) => ({ ...prev, accessToken: oauthToken }));
-      }
       return result;
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user') return null;
@@ -111,7 +82,7 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     await fbSignOut(auth);
-    setState({ user: null, profile: null, accessToken: null });
+    setState({ user: null, profile: null });
   }, []);
 
   const validateInviteCode = useCallback(
@@ -198,52 +169,15 @@ export function AuthProvider({ children }) {
     [state.user]
   );
 
-  /**
-   * Get a valid Google Drive access token.
-   * If the current token is missing or expired, prompts a re-sign-in.
-   * Google OAuth tokens expire after ~1 hour.
-   */
-  const getAccessToken = useCallback(async () => {
-    // If we have a token, test it with a lightweight Drive API call
-    if (state.accessToken) {
-      try {
-        const testRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
-          headers: { Authorization: `Bearer ${state.accessToken}` },
-        });
-        if (testRes.ok) return state.accessToken;
-        // Token expired or invalid — fall through to re-authenticate
-        console.warn('Drive token expired, re-authenticating...');
-      } catch {
-        // Network error — try using the token anyway
-        return state.accessToken;
-      }
-    }
-
-    // No token or expired — re-sign in to get a fresh one
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const token = extractAccessToken(result);
-      if (token) {
-        setState((prev) => ({ ...prev, accessToken: token }));
-      }
-      return token;
-    } catch (err) {
-      console.error('Failed to get Drive access token:', err);
-      return null;
-    }
-  }, [state.accessToken]);
-
   const value = {
     user: state.user,
     profile: state.profile,
-    accessToken: state.accessToken,
     signIn,
     signOut,
     validateInviteCode,
     generateInviteCode,
     getMyInviteCodes,
     updateProfile,
-    getAccessToken,
     isLoading: state.user === undefined,
     isAuthenticated: state.user !== null && state.user !== undefined,
     hasProfile: state.profile !== null,

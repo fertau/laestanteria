@@ -3,10 +3,7 @@ const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { google } = require("googleapis");
 const nodemailer = require("nodemailer");
-const path = require("path");
-const fs = require("fs");
 
 initializeApp();
 const db = getFirestore();
@@ -14,20 +11,6 @@ const db = getFirestore();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getDriveClient() {
-  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "./service-account.json";
-  const absPath = path.resolve(__dirname, keyPath);
-  const key = JSON.parse(fs.readFileSync(absPath, "utf8"));
-
-  const auth = new google.auth.JWT(
-    key.client_email,
-    null,
-    key.private_key,
-    ["https://www.googleapis.com/auth/drive.readonly"],
-  );
-  return google.drive({ version: "v3", auth });
-}
 
 function getTransporter() {
   return nodemailer.createTransport({
@@ -50,116 +33,54 @@ async function verifyRegistered(uid) {
   return userDoc.data();
 }
 
-// Check that caller can access the book (own book or library follow)
-async function verifyBookAccess(uid, book) {
-  const uploaderUid = book.uploadedBy?.uid;
-  if (uploaderUid === uid) return true;
-
-  const followsSnap = await db.collection("follows")
-    .where("followerUid", "==", uid)
-    .where("followingUid", "==", uploaderUid)
-    .where("status", "==", "accepted")
-    .where("accessLevel", "==", "library")
-    .limit(1)
-    .get();
-
-  if (followsSnap.empty) {
-    throw new HttpsError("permission-denied", "No tenes acceso a la biblioteca de este usuario");
-  }
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// generateDownloadLink
-// ---------------------------------------------------------------------------
-// Returns a temporary download URL for an EPUB stored in Google Drive.
-// The service account must have been shared on the file (done during upload).
-
-exports.generateDownloadLink = onCall({ region: "us-central1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Debe estar autenticado");
-  }
-
-  const { bookId } = request.data;
-  if (!bookId) throw new HttpsError("invalid-argument", "Falta bookId");
-
-  const uid = request.auth.uid;
-  await verifyRegistered(uid);
-
-  // Get book
-  const bookSnap = await db.doc(`books/${bookId}`).get();
-  if (!bookSnap.exists) throw new HttpsError("not-found", "Libro no encontrado");
-  const book = bookSnap.data();
-
-  await verifyBookAccess(uid, book);
-
-  const drive = getDriveClient();
-
-  // Get file metadata to build download URL
-  const fileMeta = await drive.files.get({
-    fileId: book.driveFileId,
-    fields: "id,name,webContentLink",
-  });
-
-  // Generate a direct download link
-  // For service account access, we return webContentLink or construct one
-  const downloadUrl = fileMeta.data.webContentLink ||
-    `https://www.googleapis.com/drive/v3/files/${book.driveFileId}?alt=media`;
-
-  // Log the download
-  await db.collection(`sendLogs/${uid}/items`).add({
-    bookId,
-    type: "download",
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  return { downloadUrl, fileName: fileMeta.data.name || `${book.title}.epub` };
-});
 
 // ---------------------------------------------------------------------------
 // sendToKindle
 // ---------------------------------------------------------------------------
-// Downloads the EPUB from Drive and sends it via email to the user's Kindle.
+// Receives an EPUB as base64 from the client and sends it via email to a
+// Kindle address. The file is processed entirely in memory — never persisted.
+// Used for both "send to own Kindle" and "send to bonded user's Kindle".
 
-exports.sendToKindle = onCall({ region: "us-central1", timeoutSeconds: 120 }, async (request) => {
+exports.sendToKindle = onCall({
+  region: "us-central1",
+  timeoutSeconds: 120,
+  // Allow larger payloads for EPUB uploads (base64-encoded, ~50MB max)
+  enforceAppCheck: false,
+}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Debe estar autenticado");
   }
 
-  const { bookId } = request.data;
-  if (!bookId) throw new HttpsError("invalid-argument", "Falta bookId");
+  const { kindleEmail, bookTitle, bookAuthor, epubBase64 } = request.data;
 
-  const uid = request.auth.uid;
-  const userData = await verifyRegistered(uid);
+  if (!kindleEmail) throw new HttpsError("invalid-argument", "Falta kindleEmail");
+  if (!bookTitle) throw new HttpsError("invalid-argument", "Falta bookTitle");
+  if (!epubBase64) throw new HttpsError("invalid-argument", "Falta epubBase64");
 
-  if (!userData.kindleEmail) {
-    throw new HttpsError("failed-precondition", "Configura tu email de Kindle en tu perfil primero");
+  if (!kindleEmail.endsWith("@kindle.com")) {
+    throw new HttpsError("invalid-argument", "El email debe terminar en @kindle.com");
   }
 
-  // Get book
-  const bookSnap = await db.doc(`books/${bookId}`).get();
-  if (!bookSnap.exists) throw new HttpsError("not-found", "Libro no encontrado");
-  const book = bookSnap.data();
+  const uid = request.auth.uid;
+  await verifyRegistered(uid);
 
-  await verifyBookAccess(uid, book);
+  // Decode base64 to buffer (in memory only — never saved to disk/storage)
+  const buffer = Buffer.from(epubBase64, "base64");
 
-  // Download from Drive
-  const drive = getDriveClient();
-  const response = await drive.files.get(
-    { fileId: book.driveFileId, alt: "media" },
-    { responseType: "arraybuffer" },
-  );
+  // Sanity check: max 50MB
+  if (buffer.length > 50 * 1024 * 1024) {
+    throw new HttpsError("invalid-argument", "El archivo es demasiado grande (max 50MB)");
+  }
 
-  const buffer = Buffer.from(response.data);
-  const fileName = `${book.author} - ${book.title}.epub`;
+  const fileName = `${bookAuthor || "Libro"} - ${bookTitle}.epub`;
 
-  // Send via email
+  // Send via SMTP
   const transporter = getTransporter();
   await transporter.sendMail({
     from: process.env.KINDLE_SENDER_EMAIL || process.env.SMTP_USER,
-    to: userData.kindleEmail,
+    to: kindleEmail,
     subject: "Libro de La estanteria",
-    text: `${book.title} por ${book.author}`,
+    text: `${bookTitle} por ${bookAuthor || ""}`,
     attachments: [{
       filename: fileName,
       content: buffer,
@@ -167,11 +88,11 @@ exports.sendToKindle = onCall({ region: "us-central1", timeoutSeconds: 120 }, as
     }],
   });
 
-  // Log
+  // Log the send
   await db.collection(`sendLogs/${uid}/items`).add({
-    bookId,
     type: "kindle",
-    kindleEmail: userData.kindleEmail,
+    kindleEmail,
+    bookTitle,
     createdAt: FieldValue.serverTimestamp(),
   });
 
