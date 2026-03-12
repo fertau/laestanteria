@@ -1,437 +1,539 @@
-# La Estantería — Diseño: Archivos Locales, Social en la Nube
+# La Estantería — Modelo "Kindle Direct"
 
-## Problema
+## Principio
 
-Los EPUBs están en Google Drive (cloud). Queremos que los archivos nunca salgan del
-dispositivo del usuario, pero manteniendo la experiencia social sin fricción.
-
-## Restricciones del diseño
-
-- **Quién hostea**: cualquier persona, sin conocimientos técnicos
-- **Tamaño del grupo**: 2-5 personas (amigos/familia)
-- **Privacidad**: EPUBs 100% locales. Metadatos (títulos, portadas, valoraciones) pueden estar en Firebase
-- **Referentes**: Plex (compartir servidor), Kavita (biblioteca local), Calibre-web (servir EPUBs)
-
-## Principio central
-
-> Firebase se queda como cerebro social. Google Drive desaparece.
-> Los EPUBs viven en el dispositivo del usuario. Compartir = transferir archivo.
+> Los EPUBs viven en el dispositivo del dueño. Nunca se hostean en la nube.
+> Compartir = enviar directamente al Kindle del otro vía email.
+> Firebase se queda como cerebro social (metadatos, catálogo, vínculos).
+> Amazon es la infraestructura de entrega.
 
 ---
 
-## Arquitectura: 3 opciones de menor a mayor fricción
+## Arquitectura
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Firebase (nube)                         │
+│                                                              │
+│  Auth · Firestore (metadatos, catálogos, vínculos, pedidos) │
+│  Cloud Functions (relay SMTP → Kindle)                       │
+└────────────┬───────────────────────────────┬─────────────────┘
+             │                               │
+      ┌──────▼──────┐                 ┌──────▼──────┐
+      │  Ana         │                │  Luis        │
+      │  (PWA)       │                │  (PWA)       │
+      │              │                │              │
+      │  OPFS local  │   ──SMTP──►   │  Kindle      │
+      │  ├─ 1984.epub│   (vía Cloud  │  📱          │
+      │  ├─ Rayuela  │    Function)  │              │
+      │  └─ Dune     │                │  OPFS local  │
+      │              │                │  (sus libros)│
+      └──────────────┘                └──────────────┘
+```
+
+**Flujo de datos:**
+- Metadatos (títulos, portadas, valoraciones) → Firebase (nube)
+- Archivos EPUB → OPFS del navegador (100% local, nunca salen a storage cloud)
+- Entrega de libros → Cloud Function lee EPUB del navegador del dueño → SMTP → `@kindle.com` del receptor
+- El EPUB toca el servidor solo en tránsito (memoria, sin persistir)
 
 ---
 
-### Opción A: "Modelo Plex" — PWA + Servidor companion local
+## Modelo de confianza: Kindle emails cruzados
+
+El vínculo entre dos usuarios se establece mediante un **handshake de Kindle emails**:
+
+### Setup (una sola vez)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Firebase (nube)                       │
-│  Auth · Firestore (metadatos, follows, actividad)       │
-│  Cloud Functions (notificaciones, digest)                │
-└──────────────┬──────────────────────┬───────────────────┘
-               │                      │
-        ┌──────▼──────┐        ┌──────▼──────┐
-        │  Ana (host) │        │ Luis (guest) │
-        │             │        │              │
-        │ PWA normal  │        │  PWA normal  │
-        │      +      │        │              │
-        │ Companion   │        │ Se conecta   │
-        │ local       │        │ al companion │
-        │ (sirve      │        │ de Ana para  │
-        │  EPUBs)     │        │ descargar    │
-        │             │        │              │
-        │ ~/Libros/   │        │ ~/Libros/    │
-        │  ├─ 1984.epub        │  └─ (vacío o │
-        │  ├─ Rayuela.epub     │     sus propios)
-        │  └─ ...     │        │              │
-        └─────────────┘        └──────────────┘
+Ana                                          Luis
+ │                                            │
+ ├─ 1. Registra su Kindle email              ├─ 1. Registra su Kindle email
+ │    ana_kindle@kindle.com                  │    luis_kindle@kindle.com
+ │                                            │
+ ├─ 2. Habilita en Amazon el email            ├─ 2. Habilita en Amazon el email
+ │    remitente de la app:                   │    remitente de la app:
+ │    estanteria@tudominio.com               │    estanteria@tudominio.com
+ │                                            │
+ ├─ 3. Envía solicitud de vínculo a Luis     │
+ │    (comparte su Kindle email)              │
+ │                                            ├─ 3. Acepta y comparte su
+ │                                            │    Kindle email con Ana
+ │                                            │
+ └─ ✓ Vínculo establecido                    └─ ✓ Vínculo establecido
+     Ana puede enviar al Kindle de Luis           Luis puede enviar al Kindle de Ana
+     Luis puede enviar al Kindle de Ana           Ana puede enviar al Kindle de Luis
 ```
 
-**Cómo funciona:**
+### ¿Por qué funciona como mecanismo de confianza?
 
-1. Ana instala la PWA normal (sin cambios) + un **companion app** ligero
-   - El companion es una app de escritorio (Electron/Tauri) o un servicio local
-   - Se instala con un click: `LaEstanteria-Companion.dmg` / `.exe` / `.AppImage`
-   - Al abrirlo: elige carpeta de libros → listo
+1. **Bidireccional**: ambos deben dar su Kindle email Y habilitar el remitente en Amazon
+2. **Revocable**: quitar el email remitente en Amazon corta el acceso instantáneamente
+3. **Verificable**: si el email no está habilitado, el envío falla → la app lo detecta
+4. **Sin intermediarios**: Amazon valida la autorización, no nosotros
+5. **Ya existe**: los usuarios de Kindle ya conocen este mecanismo
 
-2. Cuando Ana sube un libro:
-   - Metadatos → Firebase (título, autor, portada, ISBN...) — como ahora
-   - EPUB → carpeta local (`~/La Estantería/`) — en vez de Google Drive
-   - El companion lo indexa automáticamente
+### Datos en Firestore
 
-3. Luis quiere descargar un libro de Ana:
-   - Ve el libro en el catálogo (metadatos vienen de Firebase)
-   - Pulsa "Descargar"
-   - La PWA contacta al companion de Ana
-   - El companion sirve el EPUB directamente
-
-4. Conectividad Ana ↔ Luis:
-   - **Mismo WiFi**: automático (mDNS/Bonjour discovery)
-   - **Remoto**: el companion incluye túnel integrado (Cloudflare Tunnel o Tailscale)
-   - Ana comparte un enlace: `https://abc123.trycloudflare.com` (autogenerado)
-
-**Qué cambia en el código:**
-
-| Componente | Antes | Después |
-|---|---|---|
-| `useBooks.jsx` upload | Sube EPUB a Google Drive | Guarda EPUB en filesystem local vía companion API |
-| `googleDrive.js` | API de Google Drive | **Se elimina** |
-| `functions/index.js` generateDownloadLink | Genera link de Drive | Redirige al companion del propietario |
-| `functions/index.js` sendToKindle | Descarga de Drive + SMTP | Companion envía directamente por SMTP |
-| `UploadModal.jsx` | Pide acceso a Drive | Guarda en carpeta local |
-| `BookModal.jsx` download | Link de Drive | Descarga desde companion del owner |
-| `firebase.js` | Sin cambios | Sin cambios |
-| Hooks sociales | Sin cambios | Sin cambios |
-
-**Nuevo componente: Companion App (~500 LOC)**
 ```
-companion/
-├── server.js          # Express sirviendo EPUBs (puerto local)
-├── watcher.js         # Vigila carpeta de libros (chokidar)
-├── tunnel.js          # Cloudflare tunnel automático
-├── discovery.js       # mDNS para red local
-└── tray.js            # Icono en bandeja del sistema
+// Vínculo entre usuarios
+bonds/{bondId}:
+  userA: "ana_uid"
+  userB: "luis_uid"
+  kindleEmailA: "ana_kindle@kindle.com"    // visible solo para B
+  kindleEmailB: "luis_kindle@kindle.com"    // visible solo para A
+  status: "pending" | "active"
+  createdAt: timestamp
+  activatedAt: timestamp
+
+// Perfil de usuario
+users/{uid}:
+  displayName: "Ana"
+  kindleEmail: "ana_kindle@kindle.com"      // privado, solo visible a vínculos activos
+  senderEmailWhitelisted: true | false      // auto-verificado
+  ...campos existentes
 ```
-
-**Pros:**
-- Máxima funcionalidad (descarga directa entre usuarios)
-- Experiencia tipo Plex: "tu servidor personal de libros"
-- Firebase se mantiene intacto para lo social
-
-**Contras:**
-- Requiere instalar una app de escritorio adicional
-- El companion tiene que estar encendido para que otros descarguen
-- Hay que resolver conectividad (túnel)
-
-**Fricción: ★★★☆☆** (media — instalar companion + configurar túnel)
 
 ---
 
-### Opción B: "Modelo WebRTC" — Solo PWA, transferencia peer-to-peer
+## Flujos principales
+
+### 1. Publicar catálogo
+
+Sin cambios visibles para el usuario. Ana sube un libro:
 
 ```
-┌──────────────────────────────────────────────────┐
-│                  Firebase (nube)                  │
-│  Auth · Firestore · Cloud Functions              │
-│  + Señalización WebRTC (Firestore como canal)    │
-└──────────┬─────────────────────────┬─────────────┘
-           │                         │
-    ┌──────▼──────┐          ┌───────▼─────┐
-    │   Ana       │◄════════►│    Luis     │
-    │   (PWA)     │  WebRTC  │    (PWA)    │
-    │             │  P2P     │             │
-    │ IndexedDB/  │          │ IndexedDB/  │
-    │ OPFS        │          │ OPFS        │
-    │ (EPUBs)     │          │ (EPUBs)     │
-    └─────────────┘          └─────────────┘
-```
-
-**Cómo funciona:**
-
-1. Ana sube un libro desde la PWA:
-   - Metadatos → Firebase (como ahora)
-   - EPUB → **Origin Private File System (OPFS)** del navegador
-   - No sale del dispositivo, no necesita companion
-
-2. Luis quiere descargar un libro de Ana:
-   - Ve el libro en catálogo (Firebase)
-   - Pulsa "Solicitar libro"
-   - Se crea un documento en Firestore: `transfers/{id}` con offer/answer SDP
-   - Firebase actúa como servidor de señalización
-   - Se establece conexión WebRTC directa entre los navegadores
-   - El EPUB se transfiere P2P (browser a browser)
-
-3. Si Ana no está online:
-   - Luis ve "Ana está offline — solicitar para cuando vuelva"
-   - Cuando Ana abre la PWA, ve la solicitud pendiente → acepta → transferencia automática
-   - **Fallback**: Ana puede "enviar por otro medio" (genera enlace temporal o exporta archivo)
-
-**Flujo de señalización (Firestore):**
-```
-transfers/{transferId}:
-  bookId: "abc123"
-  from: "ana_uid"
-  to: "luis_uid"
-  status: "pending" | "signaling" | "transferring" | "completed"
-  offer: { sdp: "..." }    ← Ana escribe
-  answer: { sdp: "..." }   ← Luis escribe
-  iceCandidates: [...]      ← ambos escriben
-```
-
-**Almacenamiento en navegador:**
-- **OPFS (Origin Private File System)**: API moderna, rápida, sin límite práctico de tamaño
-- Fallback: IndexedDB para navegadores sin OPFS
-- Los EPUBs se almacenan como blobs con hash SHA-256 como referencia
-- Firestore guarda: `{ driveFileId → localFileHash }` para mapear libros a archivos locales
-
-**Qué cambia en el código:**
-
-| Componente | Antes | Después |
-|---|---|---|
-| `googleDrive.js` | API de Drive | **`localStore.js`** — wrapper OPFS/IndexedDB |
-| `useBooks.jsx` upload | Drive upload | `localStore.save(file)` + metadatos a Firebase |
-| `functions/index.js` generateDownloadLink | Link de Drive | **Se elimina** (P2P directo) |
-| `BookModal.jsx` download | Link de Drive | Botón "Solicitar" → WebRTC transfer |
-| Nuevo: `useTransfers.jsx` | — | Hook para gestionar transferencias P2P |
-| Nuevo: `lib/webrtc.js` | — | Lógica WebRTC (offer/answer/datachannel) |
-| Nuevo: `lib/localStore.js` | — | Abstracción OPFS + IndexedDB |
-| `functions/index.js` sendToKindle | Descarga de Drive | **Cloud Function descarga vía WebRTC relay** o usuario envía manualmente |
-
-**Pros:**
-- **Cero instalación adicional** — solo la PWA que ya existe
-- Archivos nunca tocan ningún servidor
-- Funciona en móvil y escritorio
-- Firebase ya resuelve señalización gratis (Firestore realtime)
-
-**Contras:**
-- Ambos usuarios deben estar online simultáneamente (o usar cola de pendientes)
-- OPFS tiene soporte limitado en Safari iOS (mejorando)
-- WebRTC puede fallar detrás de NATs restrictivos (solución: TURN server gratuito)
-- Enviar a Kindle requiere workaround (el usuario lo hace manualmente o desde companion)
-- Almacenamiento del navegador puede ser limpiado por el OS si hay presión de espacio
-
-**Fricción: ★★☆☆☆** (baja — nada que instalar, pero requiere que ambos estén online)
-
----
-
-### Opción C: "Modelo Buzón" — Firebase + compartir por mensajería
-
-```
-┌──────────────────────────────────────────────────┐
-│                  Firebase (nube)                  │
-│  Auth · Firestore (metadatos, follows, social)   │
-│  SIN archivos · SIN links de descarga            │
-└──────────┬─────────────────────────┬─────────────┘
-           │                         │
-    ┌──────▼──────┐          ┌───────▼─────┐
-    │   Ana       │          │    Luis     │
-    │   (PWA)     │          │    (PWA)    │
-    │             │ WhatsApp │             │
-    │ OPFS/       │ Telegram │ OPFS/      │
-    │ IndexedDB   │◄────────►│ IndexedDB  │
-    │ (EPUBs)     │ Email    │ (EPUBs)    │
-    │             │ AirDrop  │            │
-    └─────────────┘          └─────────────┘
-```
-
-**Cómo funciona:**
-
-1. Ana sube un libro:
-   - Metadatos → Firebase (como siempre)
-   - EPUB → almacenamiento local del navegador (OPFS)
-   - En el catálogo aparece el libro con toda su info pero sin link de descarga cloud
-
-2. Luis ve el libro en el catálogo y lo quiere:
-   - **Opción 1 — "Pedir libro"**: notificación a Ana vía Firebase. Ana ve el pedido y:
-     - Pulsa "Compartir" → la PWA genera el archivo desde OPFS
-     - Se abre el diálogo nativo de compartir del OS (Web Share API)
-     - Elige: WhatsApp, Telegram, AirDrop, email, guardar en disco...
-   - **Opción 2 — "Exportar paquete"**: Ana selecciona varios libros →
-     - Genera un `.estanteria` (ZIP con EPUBs + metadatos JSON)
-     - Lo comparte por el medio que quiera
-   - **Opción 3 — Enlace temporal**: Ana genera un enlace de descarga temporal
-     - Usa un servicio de transferencia efímero (tipo wormhole/transfer.sh)
-     - O simplemente comparte el archivo directamente
-
-3. Luis recibe el EPUB y lo importa:
-   - Arrastra el archivo a la PWA → se guarda en OPFS + se vincula al libro en Firebase
-   - O: la PWA detecta el `.estanteria` y auto-importa
-
-**Qué cambia en el código:**
-
-| Componente | Antes | Después |
-|---|---|---|
-| `googleDrive.js` | API de Drive | **`localStore.js`** — wrapper OPFS/IndexedDB |
-| `useBooks.jsx` upload | Drive upload | `localStore.save(file)` |
-| `BookModal.jsx` | Botón "Descargar" → Drive link | Botón "Pedir" (si no lo tienes) / "Compartir" (si lo tienes) |
-| `functions/index.js` generateDownloadLink | **Se elimina** | — |
-| Nuevo: `lib/localStore.js` | — | Almacenamiento local OPFS |
-| Nuevo: `components/ShareModal.jsx` | — | Diálogo de compartir (Web Share API) |
-| Nuevo: `components/ImportDrop.jsx` | — | Zona de drop para importar EPUBs |
-
-**Pros:**
-- **Cero fricción técnica** — nada que instalar, ni túneles, ni companion
-- Los archivos viajan por canales que el usuario ya usa (WhatsApp, etc.)
-- No hay dependencia de estar online simultáneamente
-- El modelo mental es natural: "te paso el libro"
-- Funciona igual en móvil y escritorio
-- Firebase prácticamente sin cambios
-
-**Contras:**
-- No hay descarga directa desde la app (hay un paso manual)
-- Para bibliotecas grandes, compartir libro a libro es tedioso
-  - Mitigación: paquetes `.estanteria` para compartir colecciones enteras
-- El catálogo muestra libros que no puedes descargar inmediatamente
-  - Mitigación: indicador claro de "disponible localmente" vs "pedir al dueño"
-- Enviar a Kindle: el usuario lo hace manualmente (adjuntar EPUB al email)
-
-**Fricción: ★☆☆☆☆** (mínima — pero la experiencia de compartir es manual)
-
----
-
-## Comparativa
-
-| | Companion (A) | WebRTC (B) | Buzón (C) |
-|---|---|---|---|
-| Instalar algo extra | Sí (app escritorio) | No | No |
-| Ambos online | Sí (para descargar) | Sí (para transferir) | No |
-| Descarga directa en-app | Sí | Sí | No (manual) |
-| Funciona en móvil | Parcial (companion es desktop) | Sí | Sí |
-| Complejidad de implementación | Alta | Media | Baja |
-| Cambios en código actual | Moderados | Moderados | Mínimos |
-| Archivos en la nube | Nunca | Nunca | Nunca |
-| Enviar a Kindle | Automático | Manual | Manual |
-| Funciona offline | N/A | Cola de pendientes | Sí (comparte cuando quieras) |
-
----
-
-## Recomendación: Opción C (Buzón) + elementos de B (WebRTC) como mejora futura
-
-### ¿Por qué?
-
-Para un grupo de 2-5 amigos no técnicos, la prioridad es:
-1. **Que funcione ya** — C requiere mínimos cambios al código actual
-2. **Que no haya barreras** — nada que instalar, nada que configurar
-3. **Que sea natural** — "te paso el libro por WhatsApp" es un gesto que ya hacen
-
-### Roadmap propuesto
-
-```
-Fase 1: Modelo Buzón (C)                          ← MVP
-├── Migrar almacenamiento de Drive a OPFS/IndexedDB
-├── Botón "Compartir" con Web Share API
-├── Botón "Pedir libro" con notificación Firebase
-├── Zona de importación drag & drop
-├── Indicador "lo tengo" / "pedir" en cada libro
-└── Exportar/importar paquetes .estanteria
-
-Fase 2: WebRTC opcional (B)                        ← Mejora
-├── Transferencia P2P cuando ambos están online
-├── Señalización via Firestore
-├── Cola de transferencias pendientes
-└── Indicador de presencia online
-
-Fase 3: Companion opcional (A)                     ← Power users
-├── App de escritorio para quien quiera "modo Plex"
-├── Servir EPUBs desde carpeta local
-├── Túnel integrado para acceso remoto
-└── Enviar a Kindle automático
-```
-
-### Impacto en el código actual (Fase 1)
-
-**Archivos a crear:**
-- `src/lib/localStore.js` — abstracción OPFS/IndexedDB (~100 LOC)
-- `src/components/ShareModal.jsx` — diálogo compartir (~80 LOC)
-- `src/components/ImportDrop.jsx` — zona drag & drop (~60 LOC)
-
-**Archivos a modificar:**
-- `src/hooks/useBooks.jsx` — cambiar upload de Drive a localStore
-- `src/components/UploadModal.jsx` — guardar archivo local
-- `src/components/BookModal.jsx` — botones compartir/pedir en vez de descargar
-
-**Archivos a eliminar:**
-- `src/lib/googleDrive.js`
-
-**Archivos sin cambios:**
-- Todo lo demás (hooks sociales, páginas, componentes UI, Firebase config...)
-
----
-
-## UX detallado — Fase 1 (Modelo Buzón)
-
-### Subir un libro
-
-Sin cambios aparentes. El usuario elige un EPUB, rellena metadatos, y pulsa "Subir".
-La diferencia es interna: el archivo va a OPFS en vez de a Drive.
-
-### Ver un libro en el catálogo
-
-```
-┌─────────────────────────────────────┐
-│  📖 Rayuela                        │
-│  Julio Cortázar                    │
-│  ★★★★☆ (3 valoraciones)           │
-│                                     │
-│  Estado: Leyendo  📖               │
-│                                     │
-│  ┌─────────────┐ ┌───────────────┐ │
-│  │ 📥 Leer     │ │ 📤 Compartir  │ │  ← Si LO TIENES localmente
-│  └─────────────┘ └───────────────┘ │
-│                                     │
-│  — o bien —                         │
-│                                     │
-│  ┌──────────────────────────────┐  │
-│  │ 🔔 Pedir a Ana              │  │  ← Si NO lo tienes
-│  └──────────────────────────────┘  │
-│  Subido por: Ana · hace 3 días     │
-└─────────────────────────────────────┘
-```
-
-### Flujo "Pedir libro"
-
-```
-Luis pulsa "Pedir a Ana"
+Ana elige EPUB → rellena metadatos (o auto-enriquece)
     │
-    ▼
-Firebase: nueva recomendación/solicitud
+    ├── Metadatos → Firestore (como ahora)
+    │   { title, author, genre, coverUrl, isbn, uploadedBy... }
     │
-    ▼
-Ana recibe notificación (push o en-app)
-    │
-    ▼
-Ana abre la notificación → ve "Luis quiere Rayuela"
-    │
-    ▼
-Ana pulsa "Compartir" → Web Share API
-    │
-    ├── WhatsApp → envía EPUB a Luis
-    ├── Telegram → envía EPUB a Luis
-    ├── AirDrop → envía EPUB a Luis
-    ├── Email → adjunta EPUB
-    └── Guardar → exporta a disco para enviar como quiera
-    │
-    ▼
-Luis recibe el EPUB por el canal elegido
-    │
-    ▼
-Luis abre la PWA → arrastra el EPUB → se vincula al libro
-    │
-    ▼
-Indicador cambia de "Pedir" a "Leer" ✓
+    └── EPUB → OPFS del navegador (en vez de Google Drive)
+        Se guarda el hash SHA-256 como referencia
 ```
 
-### Flujo "Compartir colección"
+El catálogo de Ana es visible para todos sus vínculos activos.
 
-```
-Ana va a una colección → "Ciencia ficción" (12 libros)
-    │
-    ▼
-Pulsa "Exportar colección"
-    │
-    ▼
-Se genera: ciencia-ficcion.estanteria (85 MB)
-    (ZIP con 12 EPUBs + metadata.json)
-    │
-    ▼
-Web Share API o descarga directa
-    │
-    ▼
-Luis recibe → arrastra a la PWA → 12 libros importados
-```
+### 2. Explorar catálogos de otros
 
-### Indicadores visuales en el catálogo
+Luis abre el catálogo y ve los libros de Ana (metadatos de Firebase):
 
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  📖          │  │  📖          │  │  📖     ☁️   │
+│  📖          │  │  📖          │  │  📖          │
 │  1984        │  │  Rayuela     │  │  Dune        │
+│  Orwell      │  │  Cortázar    │  │  Herbert     │
 │  ★★★★★      │  │  ★★★★☆      │  │  ★★★★☆      │
-│  ✅ Local    │  │  ✅ Local    │  │  📋 De Ana   │
+│  ✅ Mío      │  │  📚 De Ana  │  │  📚 De Ana  │
 └──────────────┘  └──────────────┘  └──────────────┘
-  (puedo leer)     (puedo leer)     (puedo pedir)
+
+Filtros: Todos | Mis libros | De Ana | De Marta
 ```
 
-Filtro rápido: **Todos** | **Mis libros** | **Disponibles** | **Por pedir**
+### 3. Pedir libros
+
+```
+Luis abre "Rayuela" de Ana
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  📖 Rayuela                        │
+│  Julio Cortázar · 1963             │
+│  ★★★★☆ (3 valoraciones)           │
+│                                     │
+│  📚 En la estantería de Ana        │
+│                                     │
+│  ┌──────────────────────────────┐  │
+│  │  📩 Pedir a mi Kindle       │  │
+│  └──────────────────────────────┘  │
+│                                     │
+│  ┌──────────────────────────────┐  │
+│  │  📋 Añadir a mi lista       │  │
+│  └──────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+Luis puede pedir uno o varios libros a la vez:
+
+```
+// Selección múltiple en catálogo
+Luis selecciona 5 libros de Ana → "Pedir selección a mi Kindle"
+
+// Firestore
+requests/{requestId}:
+  fromUid: "luis_uid"
+  toUid: "ana_uid"
+  books: [
+    { bookId: "abc", title: "Rayuela" },
+    { bookId: "def", title: "Dune" },
+    { bookId: "ghi", title: "1984" },
+    ...
+  ]
+  status: "pending"
+  createdAt: timestamp
+```
+
+### 4. Aprobar y enviar
+
+Ana recibe notificación (push notification de la PWA + WhatsApp opcional):
+
+```
+WhatsApp (vía Twilio/bot simple):
+─────────────────────────────────
+📚 La Estantería
+Luis te pidió 5 libros:
+- Rayuela
+- Dune
+- 1984
+- Fahrenheit 451
+- El fin de la eternidad
+
+Revisar: https://laestanteria.app/requests/xyz
+─────────────────────────────────
+```
+
+Ana abre la PWA y ve el pedido:
+
+```
+┌─────────────────────────────────────────────┐
+│  📩 Pedido de Luis · hace 10 min           │
+│                                             │
+│  ☑️ Rayuela              [Enviar]          │
+│  ☑️ Dune                 [Enviar]          │
+│  ☑️ 1984                 [Enviar]          │
+│  ☑️ Fahrenheit 451       [Enviar]          │
+│  ☐  El fin de la eternidad  [Rechazar]     │
+│                                             │
+│  ┌─────────────────────────────────────┐   │
+│  │  📩 Enviar 4 seleccionados         │   │
+│  │     → al Kindle de Luis            │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  Destino: luis_kindle@kindle.com            │
+└─────────────────────────────────────────────┘
+```
+
+Al pulsar "Enviar seleccionados":
+
+```
+Para cada libro seleccionado:
+    │
+    ├── PWA lee EPUB de OPFS
+    ├── Sube a Cloud Function (multipart, en memoria)
+    ├── Cloud Function envía vía SMTP a luis_kindle@kindle.com
+    ├── Cloud Function borra el archivo de memoria
+    └── Firestore: marca libro como enviado en el request
+
+Todo el lote en paralelo. Progreso visible:
+    Rayuela ✅ Enviado
+    Dune ✅ Enviado
+    1984 ⏳ Enviando...
+    Fahrenheit 451 ⏳ En cola
+```
+
+### 5. Recepción
+
+Luis recibe los libros en su Kindle automáticamente. En la PWA:
+
+```
+┌─────────────────────────────────────┐
+│  📩 Tu pedido a Ana                │
+│                                     │
+│  ✅ Rayuela — enviado a tu Kindle  │
+│  ✅ Dune — enviado a tu Kindle     │
+│  ✅ 1984 — enviado a tu Kindle     │
+│  ✅ Fahrenheit 451 — enviado       │
+│  ❌ El fin de la eternidad —       │
+│     Ana no lo tiene disponible     │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Notificación por WhatsApp
+
+Para que Ana no tenga que abrir la PWA constantemente, se envía un WhatsApp
+cuando recibe un pedido. Opciones de implementación:
+
+### Opción simple: enlace wa.me
+
+No requiere API de WhatsApp. La Cloud Function genera un enlace `wa.me`
+que se incluye en una push notification o email:
+
+```
+Push notification → "Luis te pidió 5 libros — revisar en la app"
+```
+
+### Opción mejor: WhatsApp Business API (Twilio/Meta)
+
+Envío directo de mensaje al WhatsApp de Ana con resumen del pedido y enlace
+a la app. Coste: ~$0.005 por mensaje (gratis en tier de prueba).
+
+### Opción más simple: solo push notification
+
+La PWA ya soporta push notifications. Es suficiente para un grupo de 2-5:
+
+```
+🔔 Luis te pidió 5 libros
+   Toca para revisar
+```
+
+---
+
+## Qué cambia en el código
+
+### Archivos a crear
+
+| Archivo | Propósito | ~LOC |
+|---|---|---|
+| `src/lib/localStore.js` | Abstracción OPFS/IndexedDB para EPUBs | 120 |
+| `src/hooks/useRequests.jsx` | Hook para pedidos (crear, aprobar, rechazar) | 150 |
+| `src/hooks/useBonds.jsx` | Hook para vínculos entre usuarios | 100 |
+| `src/components/RequestModal.jsx` | Modal de aprobación de pedidos | 120 |
+| `src/components/BondSetup.jsx` | Flujo de setup de vínculo (Kindle emails) | 100 |
+| `src/pages/Requests.jsx` | Página de pedidos pendientes/historial | 80 |
+
+### Archivos a modificar
+
+| Archivo | Cambio |
+|---|---|
+| `src/hooks/useBooks.jsx` | Upload: Drive → `localStore.save()` |
+| `src/components/UploadModal.jsx` | Guardar EPUB en OPFS en vez de Drive |
+| `src/components/BookModal.jsx` | Botón "Pedir a mi Kindle" en vez de "Descargar" |
+| `src/pages/People.jsx` | Sección de vínculos + setup Kindle email |
+| `src/pages/Notifications.jsx` | Incluir pedidos pendientes |
+| `src/hooks/useFollows.jsx` | Integrar concepto de bond (vínculo con Kindle) |
+| `functions/index.js` | `sendToKindle`: recibe EPUB como upload en vez de descargarlo de Drive |
+| `functions/index.js` | Nuevo: `onRequestCreated` trigger para push notification |
+| `firestore.rules` | Reglas para `bonds/` y `requests/` |
+
+### Archivos a eliminar
+
+| Archivo | Razón |
+|---|---|
+| `src/lib/googleDrive.js` | Ya no se usa Google Drive |
+
+### Archivos sin cambios
+
+Todo lo demás: hooks sociales (ratings, readingStatus, activity, collections,
+recommendations), componentes UI (BookCard, BookGrid, Stars, Avatar, Header...),
+páginas (Home, Catalog, Stats, Collections...), lib de metadatos
+(googleBooks, openLibrary, hardcover, epubParser...).
+
+---
+
+## Modelo de datos (nuevas colecciones Firestore)
+
+```javascript
+// Vínculo entre dos usuarios
+bonds/{bondId}: {
+  userA: uid,
+  userB: uid,
+  kindleEmailA: "x@kindle.com",   // solo legible por userB
+  kindleEmailB: "y@kindle.com",   // solo legible por userA
+  status: "pending" | "active",   // active = ambos completaron setup
+  initiatedBy: uid,
+  createdAt: timestamp,
+  activatedAt: timestamp
+}
+
+// Pedido de libros
+requests/{requestId}: {
+  fromUid: uid,                    // quien pide
+  toUid: uid,                     // dueño de los libros
+  books: [
+    {
+      bookId: string,
+      title: string,
+      status: "pending" | "approved" | "rejected" | "sent" | "failed",
+      sentAt: timestamp | null
+    }
+  ],
+  status: "pending" | "partial" | "completed",
+  createdAt: timestamp,
+  resolvedAt: timestamp
+}
+```
+
+### Firestore Rules (nuevas)
+
+```
+match /bonds/{bondId} {
+  allow read: if request.auth.uid == resource.data.userA
+               || request.auth.uid == resource.data.userB;
+  allow create: if request.auth.uid == request.resource.data.initiatedBy;
+  allow update: if request.auth.uid == resource.data.userA
+                 || request.auth.uid == resource.data.userB;
+}
+
+match /requests/{requestId} {
+  allow read: if request.auth.uid == resource.data.fromUid
+               || request.auth.uid == resource.data.toUid;
+  allow create: if request.auth.uid == request.resource.data.fromUid;
+  allow update: if request.auth.uid == resource.data.toUid;  // solo el dueño aprueba
+}
+```
+
+---
+
+## Cloud Function: envío a Kindle (modificada)
+
+```javascript
+// Antes: descarga de Google Drive
+// Ahora: recibe EPUB como upload del navegador del dueño
+
+exports.sendToKindle = onCall(async (request) => {
+  const { kindleEmail, bookTitle } = request.data;
+  const file = request.rawRequest.file;  // EPUB subido en memoria
+
+  // Validar que el usuario tiene un bond activo con el destinatario
+  // Validar que kindleEmail coincide con el bond
+  // Enviar por SMTP
+  // NO persistir el archivo en ningún storage
+
+  await transporter.sendMail({
+    from: '"La Estantería" <estanteria@tudominio.com>',
+    to: kindleEmail,
+    subject: bookTitle,
+    attachments: [{
+      filename: `${bookTitle}.epub`,
+      content: file.buffer  // en memoria, no en disco
+    }]
+  });
+
+  // Actualizar request status
+  return { success: true };
+});
+```
+
+---
+
+## Setup flow para nuevos usuarios
+
+### Onboarding actualizado
+
+```
+Paso 1: Login con Google (como ahora)
+    │
+    ▼
+Paso 2: "Configura tu Kindle"
+    ┌─────────────────────────────────────────────┐
+    │  📚 Conecta tu Kindle                      │
+    │                                             │
+    │  Tu email de Kindle:                        │
+    │  ┌─────────────────────────────────────┐   │
+    │  │ mi_kindle@kindle.com                │   │
+    │  └─────────────────────────────────────┘   │
+    │                                             │
+    │  Paso importante:                           │
+    │  Añade este email como remitente            │
+    │  aprobado en tu cuenta de Amazon:           │
+    │                                             │
+    │  estanteria@tudominio.com                   │
+    │  [Copiar]                                   │
+    │                                             │
+    │  📖 Cómo hacerlo (link a tutorial)          │
+    │                                             │
+    │  [Verificar configuración]                  │
+    │  [Saltar por ahora]                         │
+    └─────────────────────────────────────────────┘
+    │
+    ▼
+Paso 3: "Conecta con amigos" (código de invitación → bond)
+```
+
+### Crear vínculo con un amigo
+
+```
+Ana va a Personas → "Invitar amigo"
+    │
+    ▼
+Se genera enlace: laestanteria.app/bond/abc123
+Ana lo envía por WhatsApp a Luis
+    │
+    ▼
+Luis abre el enlace → acepta → introduce su Kindle email
+    │
+    ▼
+Vínculo activo: ambos ven el catálogo del otro
+                ambos pueden pedir libros al Kindle del otro
+```
+
+---
+
+## Comparativa con modelo actual
+
+| Aspecto | Modelo actual (Drive) | Modelo Kindle Direct |
+|---|---|---|
+| Dónde viven los EPUBs | Google Drive (nube) | OPFS del navegador (local) |
+| Cómo se comparten | Link de Drive | Envío directo a Kindle |
+| Quién controla el acceso | Firebase rules | El dueño aprueba cada pedido |
+| Dónde se leen los libros | Descarga + app de lectura | Kindle (el mejor lector) |
+| Enviar a Kindle | Feature extra | **Es el mecanismo central** |
+| Persistencia del archivo | Drive (permanente) | Local (dispositivo) + Kindle (Amazon) |
+| Riesgo legal (hosting) | Archivos en Google Cloud | Archivos nunca en la nube |
+| Experiencia de descarga | 1 click | Pedido → aprobación → Kindle |
+| Experiencia de lectura | Descargar EPUB → abrir con... | Ya está en tu Kindle |
+
+---
+
+## Limitaciones y mitigaciones
+
+### "¿Y si quiero el EPUB, no solo en Kindle?"
+
+Además de "Pedir a mi Kindle", ofrecer "Pedir archivo":
+- El dueño recibe el pedido igual
+- En vez de enviar a Kindle, usa Web Share API para enviarlo por WhatsApp/email/etc.
+- Es el fallback para usuarios sin Kindle
+
+### "¿Y si Ana no tiene la PWA abierta?"
+
+- Push notification de la PWA
+- Email de respaldo con enlace a la app
+- El pedido queda en cola hasta que Ana lo revise
+
+### "¿Y si el EPUB es muy grande para email?"
+
+- Límite de Amazon: 50 MB por email
+- La mayoría de EPUBs son 1-5 MB
+- Para archivos grandes: compresión previa o fallback a Web Share API
+
+### "¿Y si Ana cambió de dispositivo y perdió los EPUBs locales?"
+
+- Los metadatos siguen en Firebase (nunca se pierden)
+- Los EPUBs en OPFS se pierden si el usuario limpia datos del navegador
+- Mitigación: opción "Exportar mi biblioteca" → genera backup ZIP
+- Mitigación: indicador "archivo local disponible / no disponible" por libro
+
+### "¿Y si el usuario no tiene Kindle?"
+
+- El flujo "Pedir archivo" (sin Kindle) funciona como fallback
+- El dueño comparte el EPUB por WhatsApp/email/AirDrop
+- El receptor lo importa en la app que quiera (Apple Books, Google Play Books, etc.)
+
+---
+
+## Fases de implementación
+
+```
+Fase 1: Core Kindle Direct                              ← MVP
+├── localStore.js (OPFS para EPUBs)
+├── Bonds (vínculos con Kindle email cruzado)
+├── Requests (pedir libros)
+├── Aprobación + envío a Kindle desde la PWA
+├── Push notifications para pedidos
+└── Migrar upload de Drive a OPFS
+
+Fase 2: Pulido
+├── Pedidos batch (selección múltiple)
+├── Fallback "Pedir archivo" (Web Share API, sin Kindle)
+├── Exportar/importar biblioteca (backup)
+├── Tutorial de onboarding (configurar Kindle)
+└── WhatsApp notification (Twilio) para pedidos
+
+Fase 3: Extras
+├── Auto-envío: "Enviar automáticamente todo lo que suba Ana"
+├── Listas de deseos compartidas
+├── Historial de envíos entre usuarios
+└── Estadísticas de compartir
+```
