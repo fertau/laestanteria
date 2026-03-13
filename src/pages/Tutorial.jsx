@@ -67,7 +67,8 @@ export default function Tutorial() {
                 <>
                   En la misma pagina, anda a <strong>Preferences</strong> → <strong>Personal Document Settings</strong> →
                   <strong> Approved Personal Document E-mail List</strong>.
-                  Agrega: <code style={{ color: 'var(--accent)', background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>ticher@gmail.com</code>
+                  Agrega tu email de Gmail (el que configures como remitente en tu{' '}
+                  <Link to="/profile/me" style={{ color: 'var(--accent)', fontWeight: 600 }}>Perfil</Link>).
                 </>
               ),
             },
@@ -86,10 +87,10 @@ export default function Tutorial() {
         </TutorialStep>
 
         {/* Step 4: Gmail App Password */}
-        <TutorialStep number={4} title="Gmail App Password (opcional)" icon={KeyRound}>
+        <TutorialStep number={4} title="Configurar envio de emails" icon={KeyRound}>
           <p>
-            Esto es solo si queres <strong>enviar libros desde tu propia cuenta de Gmail</strong>.
-            Si solo queres recibir, podes saltear este paso.
+            Para enviar libros a tu Kindle y al de tus amigos, necesitas configurar el envio
+            de emails desde tu cuenta de Gmail. Es una configuracion de una sola vez.
           </p>
 
           <StepList steps={[
@@ -115,8 +116,15 @@ export default function Tutorial() {
               ),
             },
             {
-              title: 'Guarda la contrasena',
-              content: 'Copia la contrasena generada. La vas a necesitar si configuras el envio de emails desde tu cuenta.',
+              title: 'Guarda las credenciales en tu Perfil',
+              content: (
+                <>
+                  Anda a tu{' '}
+                  <Link to="/profile/me" style={{ color: 'var(--accent)', fontWeight: 600 }}>Perfil</Link>
+                  {' '}→ seccion <strong>Configuracion Kindle</strong> y pega la contrasena junto con tu email de Gmail.
+                  Usa el boton "Probar conexion" para verificar que todo funciona.
+                </>
+              ),
             },
           ]} />
         </TutorialStep>

@@ -10,6 +10,7 @@ import { searchByISBN as gbISBN, searchByTitleAuthor as gbSearch, searchCovers a
 import HelpTip from './HelpTip';
 import { isValidCover } from '../lib/coverUtils';
 import { mapGenre } from '../lib/genreUtils';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -87,11 +88,7 @@ export default function UploadModal({ onClose }) {
   const fileRef = useRef(null);
 
   // Lock body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => { lockScroll(); return unlockScroll; }, []);
 
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState(null);

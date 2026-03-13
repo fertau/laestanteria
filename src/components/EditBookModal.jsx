@@ -9,6 +9,7 @@ import { searchCovers as hcCovers } from '../lib/hardcover';
 import { searchCovers as giCovers } from '../lib/googleImageSearch';
 import { isValidCover } from '../lib/coverUtils';
 import { mapGenre } from '../lib/genreUtils';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 const GENRES = [
   'Ficcion', 'No ficcion', 'Ciencia ficcion', 'Fantasia', 'Misterio',
@@ -100,11 +101,7 @@ export default function EditBookModal({ book, onClose, onSaved }) {
   const [searchingGI, setSearchingGI] = useState(false);
 
   // Lock body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => { lockScroll(); return unlockScroll; }, []);
 
   // Auto-search when opening a book with no cover
   useEffect(() => {

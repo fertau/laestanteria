@@ -4,6 +4,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 
 initializeApp();
 const db = getFirestore();
@@ -12,6 +13,7 @@ const db = getFirestore();
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Server-level SMTP transporter (for weeklyDigest only). */
 function getTransporter() {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -33,13 +35,138 @@ async function verifyRegistered(uid) {
   return userDoc.data();
 }
 
+// ---------------------------------------------------------------------------
+// Per-user SMTP encryption (AES-256-GCM)
+// ---------------------------------------------------------------------------
+
+function getEncryptionKey() {
+  const hex = process.env.SMTP_ENCRYPTION_KEY || "";
+  if (hex.length !== 64) {
+    throw new HttpsError("internal", "SMTP_ENCRYPTION_KEY no configurada en el servidor");
+  }
+  return Buffer.from(hex, "hex");
+}
+
+function encryptPassword(plaintext) {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+}
+
+function decryptPassword(stored) {
+  const key = getEncryptionKey();
+  const [ivHex, authTagHex, encryptedHex] = stored.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const authTag = Buffer.from(authTagHex, "hex");
+  const encrypted = Buffer.from(encryptedHex, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  return decipher.update(encrypted) + decipher.final("utf8");
+}
+
+/**
+ * Create a nodemailer transporter using a user's personal SMTP credentials.
+ * Returns null if the user hasn't configured SMTP.
+ */
+async function getUserTransporter(uid) {
+  const userDoc = await db.doc(`users/${uid}`).get();
+  const userData = userDoc.exists ? userDoc.data() : null;
+  if (!userData?.smtpConfigured || !userData?.senderEmail) return null;
+
+  const smtpDoc = await db.doc(`users/${uid}/private/smtp`).get();
+  const smtpData = smtpDoc.exists ? smtpDoc.data() : null;
+  if (!smtpData?.encryptedAppPassword) return null;
+
+  const password = decryptPassword(smtpData.encryptedAppPassword);
+  return {
+    transporter: nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: { user: userData.senderEmail, pass: password },
+    }),
+    senderEmail: userData.senderEmail,
+  };
+}
+
+
+// ---------------------------------------------------------------------------
+// saveSmtpCredentials — store per-user SMTP config (encrypted)
+// ---------------------------------------------------------------------------
+
+exports.saveSmtpCredentials = onCall({
+  region: "us-central1",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Debe estar autenticado");
+  }
+  const uid = request.auth.uid;
+  await verifyRegistered(uid);
+
+  const { senderEmail, appPassword } = request.data;
+
+  if (!senderEmail || !senderEmail.includes("@")) {
+    throw new HttpsError("invalid-argument", "Email de remitente invalido");
+  }
+
+  // Gmail app passwords are 16 lowercase letters (may have spaces between groups)
+  const cleanPassword = (appPassword || "").replace(/\s/g, "");
+  if (!cleanPassword || cleanPassword.length !== 16) {
+    throw new HttpsError("invalid-argument",
+      "La contraseña de aplicacion debe tener 16 caracteres (sin espacios)");
+  }
+
+  const encryptedAppPassword = encryptPassword(cleanPassword);
+
+  // Store encrypted password in private subcollection (not readable by client)
+  await db.doc(`users/${uid}/private/smtp`).set({ encryptedAppPassword });
+
+  // Store non-sensitive fields in main user doc (readable by client for UI)
+  await db.doc(`users/${uid}`).update({
+    senderEmail,
+    smtpConfigured: true,
+  });
+
+  return { success: true };
+});
+
+// ---------------------------------------------------------------------------
+// testSmtpCredentials — verify user's SMTP connection works
+// ---------------------------------------------------------------------------
+
+exports.testSmtpCredentials = onCall({
+  region: "us-central1",
+  timeoutSeconds: 30,
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Debe estar autenticado");
+  }
+  const uid = request.auth.uid;
+  await verifyRegistered(uid);
+
+  const result = await getUserTransporter(uid);
+  if (!result) {
+    throw new HttpsError("failed-precondition",
+      "SMTP no configurado. Guarda tus credenciales primero.");
+  }
+
+  try {
+    await result.transporter.verify();
+    return { success: true, message: "Conexion SMTP verificada correctamente" };
+  } catch (err) {
+    return { success: false, message: `Error de conexion: ${err.message}` };
+  }
+});
 
 // ---------------------------------------------------------------------------
 // sendToKindle
 // ---------------------------------------------------------------------------
 // Receives an EPUB as base64 from the client and sends it via email to a
 // Kindle address. The file is processed entirely in memory — never persisted.
-// Used for both "send to own Kindle" and "send to bonded user's Kindle".
+// Uses the SENDER's personal SMTP credentials (per-user Gmail + App Password).
 
 exports.sendToKindle = onCall({
   region: "us-central1",
@@ -94,10 +221,14 @@ exports.sendToKindle = onCall({
     archive.finalize();
   });
 
-  // Send via SMTP
-  const transporter = getTransporter();
-  await transporter.sendMail({
-    from: process.env.KINDLE_SENDER_EMAIL || process.env.SMTP_USER,
+  // Send via user's personal SMTP
+  const smtpResult = await getUserTransporter(uid);
+  if (!smtpResult) {
+    throw new HttpsError("failed-precondition",
+      "No configuraste tu email de envio. Anda a Perfil → Configuracion Kindle.");
+  }
+  await smtpResult.transporter.sendMail({
+    from: smtpResult.senderEmail,
     to: kindleEmail,
     subject: "Libro de La estanteria",
     text: `${bookTitle} por ${bookAuthor || ""}`,

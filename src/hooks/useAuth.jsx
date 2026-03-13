@@ -110,6 +110,8 @@ export function AuthProvider({ children }) {
           displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
           avatar: firebaseUser.photoURL || null,
           kindleEmail: null,
+          senderEmail: null,
+          smtpConfigured: false,
           notifyDigest: true,
           fcmToken: null,
           privacyMode: 'open',

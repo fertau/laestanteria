@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
 import HelpTip from './HelpTip';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 /**
  * Modal for creating a new bond with another user.
@@ -14,11 +15,7 @@ export default function BondSetup({ targetUser, onClose }) {
   const { toast } = useToast();
 
   // Lock body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => { lockScroll(); return unlockScroll; }, []);
 
   const [kindleEmail, setKindleEmail] = useState(profile?.kindleEmail || '');
   const [sending, setSending] = useState(false);

@@ -10,6 +10,7 @@ import { useRatings } from '../hooks/useRatings';
 import { useReadingStatus } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import { functions } from '../lib/firebase';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { getEpub, hasEpub } from '../lib/localStore';
 import Stars from './Stars';
 import Avatar from './Avatar';
@@ -62,11 +63,7 @@ export default function BookModal({ book, onClose }) {
   const avgRating = activeBook.ratingCount > 0 ? (activeBook.ratingSum / activeBook.ratingCount).toFixed(1) : null;
 
   // Lock body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => { lockScroll(); return unlockScroll; }, []);
 
   // Check if EPUB is available locally
   useEffect(() => {
@@ -106,6 +103,10 @@ export default function BookModal({ book, onClose }) {
 
   // Send own book to own Kindle (book is local)
   const handleSendToMyKindle = async () => {
+    if (!profile?.smtpConfigured) {
+      toast('Configura tu email de envio en Perfil → Configuracion Kindle', 'info');
+      return;
+    }
     if (!user.kindleEmail) {
       toast('Configura tu email Kindle en tu perfil primero', 'info');
       return;

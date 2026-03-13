@@ -24,6 +24,12 @@ service cloud.firestore {
         request.auth.uid == uid;
       allow update: if isRegistered() &&
         request.auth.uid == uid;
+
+      // Private subcollection: encrypted SMTP credentials — only Cloud Functions (admin SDK)
+      match /private/{docId} {
+        allow read: if false;
+        allow write: if false;
+      }
     }
 
     match /follows/{id} {

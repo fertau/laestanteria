@@ -1,23 +1,22 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { useRequests } from '../hooks/useRequests';
 import { useBonds } from '../hooks/useBonds';
 import { useToast } from '../hooks/useToast';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 /**
  * Modal for the book owner to review and approve/reject a book request.
  * Books are sent directly to the requester's Kindle.
  */
 export default function RequestModal({ request, onClose }) {
+  const { profile } = useAuth();
   const { approveAndSend, rejectBooks } = useRequests();
   const { getKindleEmailFor } = useBonds();
   const { toast } = useToast();
 
   // Lock body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useEffect(() => { lockScroll(); return unlockScroll; }, []);
 
   const [selected, setSelected] = useState(
     () => new Set(request.books.filter((b) => b.status === 'pending').map((b) => b.bookId))
@@ -38,6 +37,10 @@ export default function RequestModal({ request, onClose }) {
   };
 
   const handleSend = async () => {
+    if (!profile?.smtpConfigured) {
+      toast('Configura tu email de envio en Perfil → Configuracion Kindle', 'info');
+      return;
+    }
     if (!kindleEmail) {
       toast('No se encontro el email Kindle del solicitante', 'error');
       return;
