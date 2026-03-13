@@ -16,6 +16,10 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 import { mapGenre } from './genreUtils';
+import { hashFile } from './hashUtils';
+
+// Re-export so existing consumers don't break
+export { hashFile };
 
 /**
  * Assess confidence in extracted metadata.
@@ -36,18 +40,6 @@ function assessConfidence(meta) {
   if (title.length >= 10) return 'medium';
 
   return 'low';
-}
-
-/**
- * Compute SHA-256 hash for a file.
- * @param {File} file
- * @returns {Promise<string>} hex hash
- */
-export async function hashFile(file) {
-  const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -158,9 +150,9 @@ export async function processQueueItem(item, context, onUpdate, onNeedsIdentific
   const { books, uid, profile } = context;
 
   try {
-    // --- Phase 1: Hash ---
+    // --- Phase 1: Hash (skip if pre-computed, e.g. from library folder) ---
     onUpdate({ status: 'hashing' });
-    const fileHash = await hashFile(item.file);
+    const fileHash = item.fileHash || await hashFile(item.file);
     onUpdate({ fileHash });
 
     // --- Phase 2: Duplicate check ---

@@ -36,6 +36,10 @@ export default function ImportModal({ onClose }) {
   const [idAuthor, setIdAuthor] = useState('');
   const [idIsbn, setIdIsbn] = useState('');
 
+  // Library folder state
+  const [libraryFolderSupported, setLibraryFolderSupported] = useState(false);
+  const [libraryFolderConnected, setLibraryFolderConnected] = useState(false);
+
   // Cleanup Object URLs on unmount
   useEffect(() => {
     return () => {
@@ -43,6 +47,22 @@ export default function ImportModal({ onClose }) {
         try { URL.revokeObjectURL(url); } catch { /* ignore */ }
       }
     };
+  }, []);
+
+  // Check library folder support
+  useEffect(() => {
+    (async () => {
+      try {
+        const mod = await import('../lib/libraryFolder.js');
+        if (mod.isLibraryFolderSupported()) {
+          setLibraryFolderSupported(true);
+          const stats = await mod.getLibraryStats();
+          setLibraryFolderConnected(stats.connected);
+        }
+      } catch {
+        // Not supported
+      }
+    })();
   }, []);
 
   // --- File selection handlers ---
@@ -93,6 +113,81 @@ export default function ImportModal({ onClose }) {
 
     if (isCalibre) {
       toast(`Biblioteca Calibre detectada: ${calibreBooks.length} libros`, 'success');
+    }
+  };
+
+  const handleLibraryFolderImport = async () => {
+    try {
+      const mod = await import('../lib/libraryFolder.js');
+      let handle = await mod.getStoredHandle();
+
+      // If not connected yet, trigger folder selection
+      if (!handle) {
+        try {
+          const result = await mod.selectLibraryFolder();
+          handle = result.handle;
+          setLibraryFolderConnected(true);
+          toast('Carpeta seleccionada. Escaneando...', 'info');
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          throw err;
+        }
+      }
+
+      // Verify permission (user gesture present here)
+      const perm = await mod.verifyPermission(handle, true);
+      if (perm !== 'granted') {
+        toast('Se necesita permiso para acceder a la carpeta', 'info');
+        return;
+      }
+
+      // Build/refresh index
+      await mod.buildIndex(handle, () => {});
+
+      // Find NEW books not yet in Firestore
+      const existingHashes = new Set(books.map((b) => b.fileHash).filter(Boolean));
+      const newFiles = await mod.getNewEpubs(existingHashes);
+
+      if (newFiles.length === 0) {
+        const stats = await mod.getLibraryStats();
+        toast(`No se encontraron libros nuevos. ${stats.fileCount} ya indexados.`, 'info');
+        return;
+      }
+
+      // Build queue items with File objects from the library folder
+      const items = [];
+      for (const entry of newFiles) {
+        const fileHandle = await mod.getFileHandleByPath(handle, entry.relativePath);
+        if (!fileHandle) continue;
+        const file = await fileHandle.getFile();
+        items.push({
+          id: crypto.randomUUID(),
+          file,
+          filename: file.name,
+          fileSize: file.size,
+          status: 'pending',
+          progress: 0,
+          error: null,
+          skipReason: null,
+          metadata: null,
+          fileHash: entry.hash,
+          source: 'library',
+          opfFile: null,
+          coverFile: null,
+        });
+      }
+
+      if (items.length === 0) {
+        toast('No se pudieron leer los archivos nuevos', 'info');
+        return;
+      }
+
+      setQueue(items);
+      setMode('files');
+      setPhase('review');
+      toast(`${items.length} libros nuevos encontrados en la carpeta`, 'success');
+    } catch (err) {
+      toast('Error: ' + err.message, 'error');
     }
   };
 
@@ -232,12 +327,12 @@ export default function ImportModal({ onClose }) {
               Seleccioná múltiples EPUBs o una carpeta de biblioteca Calibre.
             </p>
 
-            <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
               {/* Multi-file card */}
               <SelectCard
                 icon="📚"
                 title="Seleccionar archivos"
-                subtitle="Múltiples .epub"
+                subtitle="Multiples .epub"
                 onClick={() => fileInputRef.current?.click()}
               />
 
@@ -248,6 +343,16 @@ export default function ImportModal({ onClose }) {
                 subtitle="Carpeta con metadata"
                 onClick={() => folderInputRef.current?.click()}
               />
+
+              {/* Library folder card */}
+              {libraryFolderSupported && (
+                <SelectCard
+                  icon="🔗"
+                  title="Carpeta vinculada"
+                  subtitle={libraryFolderConnected ? 'Buscar libros nuevos' : 'Vincular carpeta'}
+                  onClick={handleLibraryFolderImport}
+                />
+              )}
             </div>
 
             {/* Hidden inputs */}
@@ -591,7 +696,8 @@ function SelectCard({ icon, title, subtitle, onClick }) {
     <div
       onClick={onClick}
       style={{
-        flex: 1,
+        flex: '1 1 150px',
+        minWidth: 150,
         padding: 24,
         background: 'var(--surface)',
         border: '1px solid var(--border)',

@@ -10,7 +10,7 @@ import { useAllReadingStatuses } from '../hooks/useReadingStatus';
 import { useToast } from '../hooks/useToast';
 import BookCard from '../components/BookCard';
 import BookModal from '../components/BookModal';
-import { Upload, BookOpen, BookMarked, Star, Layers, Settings, Tablet, Mail, Shield, HelpCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, BookOpen, BookMarked, Star, Layers, Settings, Tablet, Mail, Shield, HelpCircle, CheckCircle, AlertCircle, FolderOpen } from 'lucide-react';
 
 export default function Profile() {
   const { uid } = useParams();
@@ -29,6 +29,12 @@ export default function Profile() {
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [editingSmtp, setEditingSmtp] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
+
+  // Library folder state
+  const [librarySupported, setLibrarySupported] = useState(false);
+  const [libraryStats, setLibraryStats] = useState(null);
+  const [libScanning, setLibScanning] = useState(false);
+  const [libScanProgress, setLibScanProgress] = useState(null);
 
   const myBooks = useMemo(
     () => books.filter((b) => b.uploadedBy?.uid === uid),
@@ -65,6 +71,80 @@ export default function Profile() {
       });
     }
   }, [uid, isOwnProfile, profile]);
+
+  // Load library folder status
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mod = await import('../lib/libraryFolder.js');
+        if (cancelled) return;
+        if (mod.isLibraryFolderSupported()) {
+          setLibrarySupported(true);
+          const stats = await mod.getLibraryStats();
+          if (!cancelled) setLibraryStats(stats);
+        }
+      } catch {
+        // FSAA not available
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOwnProfile]);
+
+  // Library folder handlers
+  const handleSelectLibraryFolder = async () => {
+    try {
+      const mod = await import('../lib/libraryFolder.js');
+      const { handle } = await mod.selectLibraryFolder();
+      toast('Carpeta seleccionada. Escaneando...', 'success');
+      setLibScanning(true);
+      setLibScanProgress(null);
+      await mod.buildIndex(handle, (p) => setLibScanProgress(p));
+      const stats = await mod.getLibraryStats();
+      setLibraryStats(stats);
+      setLibScanning(false);
+      toast(`${stats.fileCount} archivos EPUB indexados`, 'success');
+    } catch (err) {
+      setLibScanning(false);
+      if (err.name === 'AbortError') return;
+      toast('Error al seleccionar carpeta: ' + err.message, 'error');
+    }
+  };
+
+  const handleRescanLibrary = async () => {
+    try {
+      const mod = await import('../lib/libraryFolder.js');
+      const handle = await mod.getStoredHandle();
+      if (!handle) return;
+      const perm = await mod.verifyPermission(handle, true);
+      if (perm !== 'granted') {
+        toast('Se necesita permiso para acceder a la carpeta', 'info');
+        return;
+      }
+      setLibScanning(true);
+      setLibScanProgress(null);
+      await mod.buildIndex(handle, (p) => setLibScanProgress(p));
+      const stats = await mod.getLibraryStats();
+      setLibraryStats(stats);
+      setLibScanning(false);
+      toast(`Escaneo completo: ${stats.fileCount} archivos`, 'success');
+    } catch (err) {
+      setLibScanning(false);
+      toast('Error al escanear: ' + err.message, 'error');
+    }
+  };
+
+  const handleDisconnectLibrary = async () => {
+    try {
+      const mod = await import('../lib/libraryFolder.js');
+      await mod.disconnectLibraryFolder();
+      setLibraryStats({ connected: false, folderName: null, fileCount: 0, lastScanAt: null });
+      toast('Carpeta desvinculada', 'info');
+    } catch (err) {
+      toast('Error al desvincular: ' + err.message, 'error');
+    }
+  };
 
   const handleSaveKindle = async () => {
     if (kindleEmail && !kindleEmail.endsWith('@kindle.com')) {
@@ -239,6 +319,85 @@ export default function Profile() {
               Tutorial
             </Link>
           </h2>
+
+          {/* Library folder configuration */}
+          {librarySupported && (
+            <div style={{
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius)',
+              padding: '14px 16px',
+              marginBottom: 10,
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <FolderOpen size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Carpeta Biblioteca</div>
+                {libraryStats?.connected ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--success, #27ae60)', background: 'rgba(39,174,96,0.1)', padding: '2px 8px', borderRadius: 10 }}>
+                    <CheckCircle size={12} /> Vinculada
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-dim)', background: 'var(--bg)', padding: '2px 8px', borderRadius: 10 }}>
+                    No vinculada
+                  </span>
+                )}
+              </div>
+
+              {libraryStats?.connected ? (
+                <>
+                  <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 4 }}>
+                    <strong>{libraryStats.folderName}</strong>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    {libraryStats.fileCount} archivos EPUB indexados
+                    {libraryStats.lastScanAt && (
+                      <> · Ultimo escaneo: {new Date(libraryStats.lastScanAt).toLocaleDateString()}</>
+                    )}
+                  </div>
+
+                  {/* Progress bar during scanning */}
+                  {libScanning && libScanProgress && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between', fontSize: 11,
+                        color: 'var(--text-muted)', marginBottom: 4,
+                      }}>
+                        <span>{libScanProgress.processed} de {libScanProgress.total}</span>
+                        <span>{libScanProgress.hashed} hasheados, {libScanProgress.skipped} sin cambios</span>
+                      </div>
+                      <div style={{ background: 'var(--bg)', borderRadius: 4, overflow: 'hidden', height: 4 }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${libScanProgress.total ? (libScanProgress.processed / libScanProgress.total) * 100 : 0}%`,
+                          background: 'var(--accent)',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={handleRescanLibrary} className="btn btn-secondary" style={{ fontSize: 12 }} disabled={libScanning}>
+                      {libScanning ? 'Escaneando...' : 'Re-escanear'}
+                    </button>
+                    <button onClick={handleDisconnectLibrary} className="btn btn-ghost" style={{ fontSize: 12 }} disabled={libScanning}>
+                      Desvincular
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>
+                    Vincula la carpeta donde guardas tus EPUBs. Si se pierden los datos del navegador,
+                    re-selecciona la carpeta y tus libros se reconectan automaticamente.
+                  </p>
+                  <button onClick={handleSelectLibraryFolder} className="btn btn-primary" style={{ fontSize: 13 }} disabled={libScanning}>
+                    {libScanning ? 'Escaneando...' : 'Seleccionar carpeta'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Kindle configuration */}
           <div style={{

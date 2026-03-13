@@ -4,6 +4,7 @@ import { FollowsProvider } from './hooks/useFollows';
 import { BondsProvider } from './hooks/useBonds';
 import { ToastProvider } from './hooks/useToast';
 import Header from './components/Header';
+import LibraryFolderBanner from './components/LibraryFolderBanner';
 import BottomNav from './components/BottomNav';
 import ToastContainer from './components/Toast';
 import PrivateRoute from './components/PrivateRoute';
@@ -30,6 +31,7 @@ export default function App() {
         <BondsProvider>
         <ToastProvider>
           <Header />
+          <LibraryFolderBanner />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/invite" element={<InviteCodeEntry />} />

@@ -153,14 +153,32 @@ export async function saveEpub(hash, file) {
 
 /**
  * Retrieve a locally stored EPUB by hash.
+ * Checks OPFS/IndexedDB first, then falls back to the library folder
+ * (File System Access API) if available.
  * @param {string} hash - SHA-256 hex string
  * @returns {File|null}
  */
 export async function getEpub(hash) {
+  // 1. Try existing browser storage (fast, no permission needed)
+  let file;
   if (await shouldUseOPFS()) {
-    return opfsGet(hash);
+    file = await opfsGet(hash);
+  } else {
+    file = await idbGet(hash);
   }
-  return idbGet(hash);
+  if (file) return file;
+
+  // 2. Fallback: library folder (lazy import to avoid breaking unsupported browsers)
+  try {
+    const { isLibraryFolderSupported, getEpubFromLibrary } = await import('./libraryFolder.js');
+    if (isLibraryFolderSupported()) {
+      return await getEpubFromLibrary(hash);
+    }
+  } catch {
+    // Library folder not available — that's fine
+  }
+
+  return null;
 }
 
 /**
@@ -176,13 +194,29 @@ export async function deleteEpub(hash) {
 }
 
 /**
- * Check if an EPUB exists locally.
+ * Check if an EPUB exists locally or in the library folder.
  * @param {string} hash - SHA-256 hex string
  * @returns {boolean}
  */
 export async function hasEpub(hash) {
+  // 1. Check browser storage first
+  let exists;
   if (await shouldUseOPFS()) {
-    return opfsHas(hash);
+    exists = await opfsHas(hash);
+  } else {
+    exists = await idbHas(hash);
   }
-  return idbHas(hash);
+  if (exists) return true;
+
+  // 2. Fallback: check library folder index
+  try {
+    const { isLibraryFolderSupported, hasEpubInLibrary } = await import('./libraryFolder.js');
+    if (isLibraryFolderSupported()) {
+      return await hasEpubInLibrary(hash);
+    }
+  } catch {
+    // Library folder not available — that's fine
+  }
+
+  return false;
 }
