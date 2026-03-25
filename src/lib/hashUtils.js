@@ -1,6 +1,6 @@
 /**
  * Compute SHA-256 hash for a file.
- * Shared utility used by importQueue, libraryFolder, and UploadModal.
+ * Shared utility used by importQueue and libraryFolder.
  *
  * @param {File|Blob} file
  * @returns {Promise<string>} hex hash

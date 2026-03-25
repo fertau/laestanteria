@@ -2,31 +2,27 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useBooks } from '../hooks/useBooks';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { detectCalibreStructure } from '../lib/calibreParser';
-import { buildQueue, processQueueItem } from '../lib/importQueue';
+import { processQueueItem } from '../lib/importQueue';
 import HelpTip from './HelpTip';
 
 /**
- * ImportModal — Bulk import with 4 phases:
- *   1. Select: choose files or Calibre folder
- *   2. Review: preview queue, remove items
- *   3. Processing: sequential upload with progress
- *   4. Done: summary of results
+ * ImportModal — Library folder import with 3 phases:
+ *   1. Review: preview queue of new books found in linked folder
+ *   2. Processing: sequential upload with progress
+ *   3. Done: summary of results
  *
- * EPUBs are saved locally (OPFS/IndexedDB) and metadata to Firestore.
+ * On open, automatically scans the linked folder (or prompts to link one).
+ * EPUBs are read from disk; metadata is saved to Firestore.
  */
 export default function ImportModal({ onClose }) {
   const { books } = useBooks();
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
-  const [phase, setPhase] = useState('select'); // select | review | processing | done
+  const [phase, setPhase] = useState('scanning'); // scanning | review | processing | done
   const [queue, setQueue] = useState([]);
-  const [mode, setMode] = useState(null); // 'files' | 'calibre' | 'mixed'
   const [currentIndex, setCurrentIndex] = useState(-1);
 
-  const fileInputRef = useRef(null);
-  const folderInputRef = useRef(null);
   const cancelledRef = useRef(false);
   const coverUrlsRef = useRef([]); // track Object URLs for cleanup
 
@@ -35,10 +31,6 @@ export default function ImportModal({ onClose }) {
   const [idTitle, setIdTitle] = useState('');
   const [idAuthor, setIdAuthor] = useState('');
   const [idIsbn, setIdIsbn] = useState('');
-
-  // Library folder state
-  const [libraryFolderSupported, setLibraryFolderSupported] = useState(false);
-  const [libraryFolderConnected, setLibraryFolderConnected] = useState(false);
 
   // Cleanup Object URLs on unmount
   useEffect(() => {
@@ -49,76 +41,22 @@ export default function ImportModal({ onClose }) {
     };
   }, []);
 
-  // Check library folder support
+  // On mount, immediately start the library folder scan
   useEffect(() => {
-    (async () => {
-      try {
-        const mod = await import('../lib/libraryFolder.js');
-        if (mod.isLibraryFolderSupported()) {
-          setLibraryFolderSupported(true);
-          const stats = await mod.getLibraryStats();
-          setLibraryFolderConnected(stats.connected);
-        }
-      } catch {
-        // Not supported
-      }
-    })();
+    handleLibraryFolderImport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // --- File selection handlers ---
-
-  const handleFilesSelected = (e) => {
-    const files = Array.from(e.target.files || []);
-    const epubs = files.filter((f) => f.name.toLowerCase().endsWith('.epub'));
-
-    if (epubs.length === 0) {
-      toast('No se encontraron archivos EPUB', 'info');
-      return;
-    }
-
-    const items = buildQueue(epubs, [], 'plain');
-    setQueue(items);
-    setMode('files');
-    setPhase('review');
-  };
-
-  const handleFolderSelected = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const { isCalibre, books: calibreBooks, looseEpubs } = detectCalibreStructure(files);
-
-    if (calibreBooks.length === 0 && looseEpubs.length === 0) {
-      // Last resort: find any epub in the whole file list
-      const anyEpubs = files.filter((f) => f.name.toLowerCase().endsWith('.epub'));
-      if (anyEpubs.length === 0) {
-        toast('No se encontraron archivos EPUB en la carpeta', 'info');
-        return;
-      }
-      const items = buildQueue(anyEpubs, [], 'plain');
-      setQueue(items);
-      setMode('files');
-      setPhase('review');
-      return;
-    }
-
-    // Build combined queue
-    const calibreItems = isCalibre ? buildQueue([], calibreBooks, 'calibre') : [];
-    const plainItems = looseEpubs.length > 0 ? buildQueue(looseEpubs, [], 'plain') : [];
-    const allItems = [...calibreItems, ...plainItems];
-
-    setQueue(allItems);
-    setMode(isCalibre && plainItems.length > 0 ? 'mixed' : isCalibre ? 'calibre' : 'files');
-    setPhase('review');
-
-    if (isCalibre) {
-      toast(`Biblioteca Calibre detectada: ${calibreBooks.length} libros`, 'success');
-    }
-  };
 
   const handleLibraryFolderImport = async () => {
     try {
       const mod = await import('../lib/libraryFolder.js');
+
+      if (!mod.isLibraryFolderSupported()) {
+        toast('Tu navegador no soporta esta funcion. Usa Chrome o Edge.', 'info');
+        onClose();
+        return;
+      }
+
       let handle = await mod.getStoredHandle();
 
       // If not connected yet, trigger folder selection
@@ -126,10 +64,9 @@ export default function ImportModal({ onClose }) {
         try {
           const result = await mod.selectLibraryFolder();
           handle = result.handle;
-          setLibraryFolderConnected(true);
           toast('Carpeta seleccionada. Escaneando...', 'info');
         } catch (err) {
-          if (err.name === 'AbortError') return;
+          if (err.name === 'AbortError') { onClose(); return; }
           throw err;
         }
       }
@@ -138,6 +75,7 @@ export default function ImportModal({ onClose }) {
       const perm = await mod.verifyPermission(handle, true);
       if (perm !== 'granted') {
         toast('Se necesita permiso para acceder a la carpeta', 'info');
+        onClose();
         return;
       }
 
@@ -151,6 +89,7 @@ export default function ImportModal({ onClose }) {
       if (newFiles.length === 0) {
         const stats = await mod.getLibraryStats();
         toast(`No se encontraron libros nuevos. ${stats.fileCount} ya indexados.`, 'info');
+        onClose();
         return;
       }
 
@@ -179,15 +118,16 @@ export default function ImportModal({ onClose }) {
 
       if (items.length === 0) {
         toast('No se pudieron leer los archivos nuevos', 'info');
+        onClose();
         return;
       }
 
       setQueue(items);
-      setMode('files');
       setPhase('review');
       toast(`${items.length} libros nuevos encontrados en la carpeta`, 'success');
     } catch (err) {
       toast('Error: ' + err.message, 'error');
+      onClose();
     }
   };
 
@@ -275,8 +215,6 @@ export default function ImportModal({ onClose }) {
     pending: queue.filter((q) => q.status === 'pending').length,
   };
 
-  const modeLabel = mode === 'calibre' ? 'Calibre' : mode === 'mixed' ? 'Calibre + EPUBs' : 'EPUBs';
-
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget && phase !== 'processing') onClose(); }}
@@ -311,70 +249,23 @@ export default function ImportModal({ onClose }) {
         }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
             {phase === 'done' ? 'Importacion completa' :
-              phase === 'processing' ? 'Importando...' : <>Importar libros <HelpTip text="Selecciona multiples EPUBs o una carpeta de Calibre. Los archivos se guardan en tu navegador, nunca en la nube." size={16} position="bottom" /></>}
+              phase === 'processing' ? 'Importando...' :
+              phase === 'scanning' ? 'Escaneando carpeta...' :
+              <>Libros nuevos encontrados <HelpTip text="Los archivos se leen directo de tu carpeta vinculada." size={16} position="bottom" /></>}
           </h2>
-          {phase !== 'processing' && (
+          {phase !== 'processing' && phase !== 'scanning' && (
             <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
               ✕
             </button>
           )}
         </div>
 
-        {/* ===== PHASE: SELECT ===== */}
-        {phase === 'select' && (
-          <div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-              Seleccioná múltiples EPUBs o una carpeta de biblioteca Calibre.
-            </p>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              {/* Multi-file card */}
-              <SelectCard
-                icon="📚"
-                title="Seleccionar archivos"
-                subtitle="Multiples .epub"
-                onClick={() => fileInputRef.current?.click()}
-              />
-
-              {/* Calibre folder card */}
-              <SelectCard
-                icon="📂"
-                title="Biblioteca Calibre"
-                subtitle="Carpeta con metadata"
-                onClick={() => folderInputRef.current?.click()}
-              />
-
-              {/* Library folder card */}
-              {libraryFolderSupported && (
-                <SelectCard
-                  icon="🔗"
-                  title="Carpeta vinculada"
-                  subtitle={libraryFolderConnected ? 'Buscar libros nuevos' : 'Vincular carpeta'}
-                  onClick={handleLibraryFolderImport}
-                />
-              )}
-            </div>
-
-            {/* Hidden inputs */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".epub"
-              multiple
-              onChange={handleFilesSelected}
-              style={{ display: 'none' }}
-            />
-            <input
-              ref={folderInputRef}
-              type="file"
-              /* @ts-ignore */
-              webkitdirectory=""
-              onChange={handleFolderSelected}
-              style={{ display: 'none' }}
-            />
-
-            <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 16, textAlign: 'center' }}>
-              Si seleccionás una carpeta Calibre, se detectará automáticamente la metadata de cada libro.
+        {/* ===== PHASE: SCANNING ===== */}
+        {phase === 'scanning' && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3, margin: '0 auto 16px' }} />
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+              Buscando libros nuevos en tu carpeta...
             </p>
           </div>
         )}
@@ -389,25 +280,8 @@ export default function ImportModal({ onClose }) {
               marginBottom: 16,
             }}>
               <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-                {queue.length} {queue.length === 1 ? 'libro' : 'libros'} detectados
-                <span style={{
-                  marginLeft: 8,
-                  fontSize: 11,
-                  padding: '2px 8px',
-                  background: mode === 'calibre' || mode === 'mixed' ? 'rgba(39,174,96,0.15)' : 'var(--surface)',
-                  color: mode === 'calibre' || mode === 'mixed' ? 'var(--success)' : 'var(--text-dim)',
-                  borderRadius: 12,
-                }}>
-                  {modeLabel}
-                </span>
+                {queue.length} {queue.length === 1 ? 'libro nuevo' : 'libros nuevos'}
               </span>
-              <button
-                className="btn-ghost"
-                style={{ fontSize: 12 }}
-                onClick={() => { setPhase('select'); setQueue([]); }}
-              >
-                ← Volver
-              </button>
             </div>
 
             {/* Queue list */}
@@ -690,37 +564,6 @@ export default function ImportModal({ onClose }) {
 }
 
 // --- Sub-components ---
-
-function SelectCard({ icon, title, subtitle, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        flex: '1 1 150px',
-        minWidth: 150,
-        padding: 24,
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        cursor: 'pointer',
-        textAlign: 'center',
-        transition: 'border-color var(--transition), background var(--transition)',
-      }}
-      onMouseOver={(e) => {
-        e.currentTarget.style.borderColor = 'var(--accent)';
-        e.currentTarget.style.background = 'var(--accent-soft)';
-      }}
-      onMouseOut={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border)';
-        e.currentTarget.style.background = 'var(--surface)';
-      }}
-    >
-      <div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{subtitle}</div>
-    </div>
-  );
-}
 
 function QueueStatusRow({ item, isCurrent }) {
   const statusDisplay = () => {

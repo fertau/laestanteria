@@ -6,7 +6,6 @@ import { useToast } from '../hooks/useToast';
 import HelpTip from '../components/HelpTip';
 import BookGrid from '../components/BookGrid';
 import BookModal from '../components/BookModal';
-import UploadModal from '../components/UploadModal';
 import ImportModal from '../components/ImportModal';
 import SelectionActionBar from '../components/SelectionActionBar';
 
@@ -43,7 +42,6 @@ export default function Catalog() {
   const [genreFilter, setGenreFilter] = useState('');
   const [langFilter, setLangFilter] = useState('');
   const [sortBy, setSortBy] = useState('recent');
-  const [showUpload, setShowUpload] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
 
@@ -205,17 +203,10 @@ export default function Catalog() {
             <>
               <button
                 className="btn btn-primary"
-                onClick={() => setShowUpload(true)}
-              >
-                + Agregar libro
-                <HelpTip text="Agrega un EPUB desde tu dispositivo. Se guarda localmente en tu navegador." position="bottom" />
-              </button>
-              <button
-                className="btn btn-secondary"
                 onClick={() => setShowImport(true)}
               >
-                Importar
-                <HelpTip text="Importa multiples EPUBs o una biblioteca Calibre de una sola vez." position="bottom" />
+                Vincular carpeta
+                <HelpTip text="Vincula una carpeta de tu computadora con EPUBs. Los archivos se leen directo del disco." position="bottom" />
               </button>
               {books.some((b) => b.uploadedBy?.uid === user?.uid) && (
                 <Link
@@ -334,13 +325,13 @@ export default function Catalog() {
         }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>Estanteria vacia</div>
           <p style={{ marginBottom: 16 }}>
-            Agrega tu primer libro o segui a alguien para ver su biblioteca.
+            Vincula tu carpeta de libros o segui a alguien para ver su biblioteca.
           </p>
           <button
             className="btn btn-primary"
-            onClick={() => setShowUpload(true)}
+            onClick={() => setShowImport(true)}
           >
-            + Agregar tu primer libro
+            Vincular carpeta
           </button>
         </div>
       )}
@@ -380,7 +371,6 @@ export default function Catalog() {
         />
       )}
 
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
       {selectedBook && <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />}
     </div>
