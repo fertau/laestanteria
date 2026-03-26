@@ -107,7 +107,7 @@ export default function BookModal({ book, onClose }) {
       toast('Configura tu email de envio en Perfil → Configuracion Kindle', 'info');
       return;
     }
-    if (!user.kindleEmail) {
+    if (!profile?.kindleEmail) {
       toast('Configura tu email Kindle en tu perfil primero', 'info');
       return;
     }
@@ -128,7 +128,7 @@ export default function BookModal({ book, onClose }) {
       );
       const fn = httpsCallable(functions, 'sendToKindle');
       await fn({
-        kindleEmail: user.kindleEmail,
+        kindleEmail: profile.kindleEmail,
         bookTitle: activeBook.title,
         bookAuthor: activeBook.author,
         epubBase64: base64,

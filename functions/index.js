@@ -99,6 +99,7 @@ async function getUserTransporter(uid) {
 
 exports.saveSmtpCredentials = onCall({
   region: "us-central1",
+  secrets: ["SMTP_ENCRYPTION_KEY"],
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Debe estar autenticado");
@@ -140,6 +141,7 @@ exports.saveSmtpCredentials = onCall({
 exports.testSmtpCredentials = onCall({
   region: "us-central1",
   timeoutSeconds: 30,
+  secrets: ["SMTP_ENCRYPTION_KEY"],
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Debe estar autenticado");
@@ -171,6 +173,7 @@ exports.testSmtpCredentials = onCall({
 exports.sendToKindle = onCall({
   region: "us-central1",
   timeoutSeconds: 120,
+  secrets: ["SMTP_ENCRYPTION_KEY"],
   // Allow larger payloads for EPUB uploads (base64-encoded, ~50MB max)
   enforceAppCheck: false,
 }, async (request) => {

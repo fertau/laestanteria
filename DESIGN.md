@@ -13,7 +13,7 @@
 - **Differentiation:** Unica app de libros con dark theme calido. Todos los competidores usan fondos claros y sans-serif genericos.
 
 ## Typography
-- **Display/Hero:** Instrument Serif — sofisticada, contemporanea, con calidez editorial. Para titulos de pagina, hero, nombres de libros en modales.
+- **Display/Hero:** Playfair Display — sofisticada, contemporanea, con calidez editorial. Para titulos de pagina, hero, nombres de libros en modales.
 - **Body:** DM Sans — legible, moderno, buen complemento del serif. Para texto general, botones, labels, descripciones.
 - **UI/Labels:** Same as body (DM Sans)
 - **Data/Tables:** Geist Mono — tabular-nums, limpio. Para stats, contadores, metadata tecnica.
@@ -65,6 +65,6 @@
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-03-26 | Initial design system | Created by /design-consultation. Competitive research showed all book apps use light themes + generic sans-serif. La Estanteria's dark warm palette + Instrument Serif serif gives it unique identity. |
-| 2026-03-26 | Instrument Serif for display | User wanted sophisticated + classic, not vintage. Instrument Serif is contemporary editorial serif that pairs well with the warm amber palette. |
+| 2026-03-26 | Initial design system | Created by /design-consultation. Competitive research showed all book apps use light themes + generic sans-serif. La Estanteria's dark warm palette + Playfair Display serif gives it unique identity. |
+| 2026-03-26 | Playfair Display for display | User wanted sophisticated + classic, not vintage. Playfair Display is contemporary editorial serif that pairs well with the warm amber palette. |
 | 2026-03-26 | No light mode | Deliberate risk — dark-only identity. Coherent with the "libreria de barrio a la noche" mood. |
