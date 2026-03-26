@@ -1,13 +1,33 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
-initializeApp();
-const db = getFirestore();
+// Lazy-loaded modules (deferred to avoid deploy timeout)
+let _firestore, _scheduler, _nodemailer, _db;
+
+function getDb() {
+  if (!_db) {
+    const { initializeApp } = require("firebase-admin/app");
+    const { getFirestore } = require("firebase-admin/firestore");
+    try { initializeApp(); } catch { /* already initialized */ }
+    _db = getFirestore();
+  }
+  return _db;
+}
+function getFieldValue() {
+  return require("firebase-admin/firestore").FieldValue;
+}
+function getNodemailer() {
+  if (!_nodemailer) _nodemailer = require("nodemailer");
+  return _nodemailer;
+}
+function getFirestoreTriggers() {
+  if (!_firestore) _firestore = require("firebase-functions/v2/firestore");
+  return _firestore;
+}
+function getScheduler() {
+  if (!_scheduler) _scheduler = require("firebase-functions/v2/scheduler");
+  return _scheduler;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -15,7 +35,7 @@ const db = getFirestore();
 
 /** Server-level SMTP transporter (for weeklyDigest only). */
 function getTransporter() {
-  return nodemailer.createTransport({
+  return getNodemailer().createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: parseInt(process.env.SMTP_PORT || "587"),
     secure: false,
@@ -28,7 +48,7 @@ function getTransporter() {
 
 // Check that caller is a registered user
 async function verifyRegistered(uid) {
-  const userDoc = await db.doc(`users/${uid}`).get();
+  const userDoc = await getDb().doc(`users/${uid}`).get();
   if (!userDoc.exists) {
     throw new HttpsError("permission-denied", "Usuario no registrado");
   }
@@ -72,17 +92,17 @@ function decryptPassword(stored) {
  * Returns null if the user hasn't configured SMTP.
  */
 async function getUserTransporter(uid) {
-  const userDoc = await db.doc(`users/${uid}`).get();
+  const userDoc = await getDb().doc(`users/${uid}`).get();
   const userData = userDoc.exists ? userDoc.data() : null;
   if (!userData?.smtpConfigured || !userData?.senderEmail) return null;
 
-  const smtpDoc = await db.doc(`users/${uid}/private/smtp`).get();
+  const smtpDoc = await getDb().doc(`users/${uid}/private/smtp`).get();
   const smtpData = smtpDoc.exists ? smtpDoc.data() : null;
   if (!smtpData?.encryptedAppPassword) return null;
 
   const password = decryptPassword(smtpData.encryptedAppPassword);
   return {
-    transporter: nodemailer.createTransport({
+    transporter: getNodemailer().createTransport({
       host: "smtp.gmail.com",
       port: 587,
       secure: false,
@@ -123,10 +143,10 @@ exports.saveSmtpCredentials = onCall({
   const encryptedAppPassword = encryptPassword(cleanPassword);
 
   // Store encrypted password in private subcollection (not readable by client)
-  await db.doc(`users/${uid}/private/smtp`).set({ encryptedAppPassword });
+  await getDb().doc(`users/${uid}/private/smtp`).set({ encryptedAppPassword });
 
   // Store non-sensitive fields in main user doc (readable by client for UI)
-  await db.doc(`users/${uid}`).update({
+  await getDb().doc(`users/${uid}`).update({
     senderEmail,
     smtpConfigured: true,
   });
@@ -243,11 +263,11 @@ exports.sendToKindle = onCall({
   });
 
   // Log the send
-  await db.collection(`sendLogs/${uid}/items`).add({
+  await getDb().collection(`sendLogs/${uid}/items`).add({
     type: "kindle",
     kindleEmail,
     bookTitle,
-    createdAt: FieldValue.serverTimestamp(),
+    createdAt: getFieldValue().serverTimestamp(),
   });
 
   return { success: true };
@@ -258,11 +278,11 @@ exports.sendToKindle = onCall({
 // ---------------------------------------------------------------------------
 
 // When a new book is created → activity event
-exports.onBookCreated = onDocumentCreated("books/{bookId}", async (event) => {
+exports.onBookCreated = getFirestoreTriggers().onDocumentCreated("books/{bookId}", async (event) => {
   const book = event.data.data();
   if (!book) return;
 
-  await db.collection("activity").add({
+  await getDb().collection("activity").add({
     type: "book_added",
     actorUid: book.uploadedBy?.uid,
     actorName: book.uploadedBy?.displayName,
@@ -270,12 +290,12 @@ exports.onBookCreated = onDocumentCreated("books/{bookId}", async (event) => {
     bookTitle: book.title,
     bookAuthor: book.author,
     bookCoverUrl: book.coverUrl || "",
-    createdAt: FieldValue.serverTimestamp(),
+    createdAt: getFieldValue().serverTimestamp(),
   });
 });
 
 // When reading status changes → activity event
-exports.onReadingStatusChanged = onDocumentWritten(
+exports.onReadingStatusChanged = getFirestoreTriggers().onDocumentWritten(
   "readingStatus/{uid}/books/{bookId}",
   async (event) => {
     const after = event.data.after?.data();
@@ -285,16 +305,16 @@ exports.onReadingStatusChanged = onDocumentWritten(
     const bookId = event.params.bookId;
 
     // Get user name
-    const userSnap = await db.doc(`users/${uid}`).get();
+    const userSnap = await getDb().doc(`users/${uid}`).get();
     const userName = userSnap.exists ? userSnap.data().displayName : "Alguien";
 
     // Get book info
-    const bookSnap = await db.doc(`books/${bookId}`).get();
+    const bookSnap = await getDb().doc(`books/${bookId}`).get();
     const book = bookSnap.exists ? bookSnap.data() : {};
 
     const statusLabels = { want: "quiere leer", reading: "esta leyendo", finished: "termino" };
 
-    await db.collection("activity").add({
+    await getDb().collection("activity").add({
       type: "reading_status",
       actorUid: uid,
       actorName: userName,
@@ -303,7 +323,7 @@ exports.onReadingStatusChanged = onDocumentWritten(
       bookAuthor: book.author || "",
       status: after.status,
       statusLabel: statusLabels[after.status] || after.status,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: getFieldValue().serverTimestamp(),
     });
   },
 );
@@ -312,12 +332,12 @@ exports.onReadingStatusChanged = onDocumentWritten(
 // Weekly digest (runs every Monday at 9 AM)
 // ---------------------------------------------------------------------------
 
-exports.weeklyDigest = onSchedule("every monday 09:00", async () => {
+exports.weeklyDigest = getScheduler().onSchedule("every monday 09:00", async () => {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
   // Get recent books
-  const recentBooks = await db.collection("books")
+  const recentBooks = await getDb().collection("books")
     .where("uploadedAt", ">=", oneWeekAgo)
     .orderBy("uploadedAt", "desc")
     .limit(10)
@@ -326,7 +346,7 @@ exports.weeklyDigest = onSchedule("every monday 09:00", async () => {
   if (recentBooks.empty) return; // nothing to report
 
   // Get all users who want digests
-  const usersSnap = await db.collection("users")
+  const usersSnap = await getDb().collection("users")
     .where("notifyDigest", "==", true)
     .get();
 
