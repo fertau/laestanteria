@@ -42,6 +42,7 @@ export default function Catalog() {
   const [genreFilter, setGenreFilter] = useState('');
   const [langFilter, setLangFilter] = useState('');
   const [sortBy, setSortBy] = useState('recent');
+  const [viewMode, setViewMode] = useState('all'); // 'all' | 'mine' | 'friends'
   const [showImport, setShowImport] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
   const [librarySupported, setLibrarySupported] = useState(false);
@@ -60,6 +61,13 @@ export default function Catalog() {
 
   const filtered = useMemo(() => {
     let result = [...groupedBooks];
+
+    // View mode filter
+    if (viewMode === 'mine') {
+      result = result.filter((b) => b.uploadedBy?.uid === user?.uid);
+    } else if (viewMode === 'friends') {
+      result = result.filter((b) => b.uploadedBy?.uid !== user?.uid);
+    }
 
     // Search — for grouped books, match if any variant matches
     if (search.trim()) {
@@ -114,7 +122,7 @@ export default function Catalog() {
     }
 
     return result;
-  }, [groupedBooks, search, genreFilter, langFilter, sortBy]);
+  }, [groupedBooks, search, genreFilter, langFilter, sortBy, viewMode, user?.uid]);
 
   // --- Selection derived values ---
   const selectableIds = useMemo(
@@ -245,6 +253,31 @@ export default function Catalog() {
         marginBottom: 20,
         flexWrap: 'wrap',
       }}>
+        {/* View mode toggle */}
+        <div style={{ display: 'flex', gap: 0, borderRadius: 'var(--radius)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+          {[
+            { value: 'all', label: 'Todos' },
+            { value: 'mine', label: 'Mis libros' },
+            { value: 'friends', label: 'De amigos' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setViewMode(opt.value)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                background: viewMode === opt.value ? 'var(--accent)' : 'var(--surface)',
+                color: viewMode === opt.value ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -321,7 +354,10 @@ export default function Catalog() {
           marginBottom: 16,
         }}>
           {filtered.length} {filtered.length === 1 ? 'libro' : 'libros'}
-          {search.trim() || genreFilter || langFilter ? ' encontrados' : ' en tu catalogo'}
+          {search.trim() || genreFilter || langFilter ? ' encontrados' :
+            viewMode === 'mine' ? ' tuyos' :
+            viewMode === 'friends' ? ' de amigos' :
+            ' en la estanteria'}
         </div>
       )}
 
