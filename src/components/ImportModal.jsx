@@ -19,7 +19,7 @@ export default function ImportModal({ onClose }) {
   const { user, profile } = useAuth();
   const { toast } = useToast();
 
-  const [phase, setPhase] = useState('scanning'); // scanning | review | processing | done
+  const [phase, setPhase] = useState('init'); // init | needs_folder | scanning | review | processing | done
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
 
@@ -41,37 +41,40 @@ export default function ImportModal({ onClose }) {
     };
   }, []);
 
-  // On mount, immediately start the library folder scan
+  // On mount, check if we already have a stored handle
+  // If yes, go straight to scanning. If no, show the "needs_folder" phase
+  // so the user can click a button (providing the required user gesture).
   useEffect(() => {
-    handleLibraryFolderImport();
+    (async () => {
+      try {
+        const mod = await import('../lib/libraryFolder.js');
+        if (!mod.isLibraryFolderSupported()) {
+          toast('Tu navegador no soporta esta funcion. Usa Chrome o Edge.', 'info');
+          onClose();
+          return;
+        }
+        const handle = await mod.getStoredHandle();
+        if (handle) {
+          // Already connected — auto-scan (permission re-request may need gesture,
+          // but queryPermission works without one if already granted)
+          setPhase('scanning');
+          scanExistingFolder(handle);
+        } else {
+          // No folder yet — show button so user provides the gesture
+          setPhase('needs_folder');
+        }
+      } catch {
+        setPhase('needs_folder');
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLibraryFolderImport = async () => {
+  /** Scan an already-connected folder (handle available, permission likely granted) */
+  const scanExistingFolder = async (handle) => {
     try {
       const mod = await import('../lib/libraryFolder.js');
 
-      if (!mod.isLibraryFolderSupported()) {
-        toast('Tu navegador no soporta esta funcion. Usa Chrome o Edge.', 'info');
-        onClose();
-        return;
-      }
-
-      let handle = await mod.getStoredHandle();
-
-      // If not connected yet, trigger folder selection
-      if (!handle) {
-        try {
-          const result = await mod.selectLibraryFolder();
-          handle = result.handle;
-          toast('Carpeta seleccionada. Escaneando...', 'info');
-        } catch (err) {
-          if (err.name === 'AbortError') { onClose(); return; }
-          throw err;
-        }
-      }
-
-      // Verify permission (user gesture present here)
       const perm = await mod.verifyPermission(handle, true);
       if (perm !== 'granted') {
         toast('Se necesita permiso para acceder a la carpeta', 'info');
@@ -96,9 +99,9 @@ export default function ImportModal({ onClose }) {
       // Build queue items with File objects from the library folder
       const items = [];
       for (const entry of newFiles) {
-        const fileHandle = await mod.getFileHandleByPath(handle, entry.relativePath);
-        if (!fileHandle) continue;
-        const file = await fileHandle.getFile();
+        const fh = await mod.getFileHandleByPath(handle, entry.relativePath);
+        if (!fh) continue;
+        const file = await fh.getFile();
         items.push({
           id: crypto.randomUUID(),
           file,
@@ -126,6 +129,21 @@ export default function ImportModal({ onClose }) {
       setPhase('review');
       toast(`${items.length} libros nuevos encontrados en la carpeta`, 'success');
     } catch (err) {
+      toast('Error: ' + err.message, 'error');
+      onClose();
+    }
+  };
+
+  /** Select a new folder (requires user gesture — called from button click) */
+  const handleSelectFolder = async () => {
+    try {
+      const mod = await import('../lib/libraryFolder.js');
+      const result = await mod.selectLibraryFolder();
+      toast('Carpeta seleccionada. Escaneando...', 'info');
+      setPhase('scanning');
+      await scanExistingFolder(result.handle);
+    } catch (err) {
+      if (err.name === 'AbortError') { onClose(); return; }
       toast('Error: ' + err.message, 'error');
       onClose();
     }
@@ -166,7 +184,7 @@ export default function ImportModal({ onClose }) {
         (update) => {
           updateItem(i, update);
 
-          // Track Object URLs from Calibre covers for cleanup
+          // Track Object URLs for cleanup
           if (update.metadata?.coverUrl && update.metadata.coverUrl.startsWith('blob:')) {
             coverUrlsRef.current.push(update.metadata.coverUrl);
           }
@@ -250,15 +268,41 @@ export default function ImportModal({ onClose }) {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>
             {phase === 'done' ? 'Importacion completa' :
               phase === 'processing' ? 'Importando...' :
-              phase === 'scanning' ? 'Escaneando carpeta...' :
+              phase === 'scanning' || phase === 'init' ? 'Escaneando carpeta...' :
+              phase === 'needs_folder' ? 'Vincular carpeta' :
               <>Libros nuevos encontrados <HelpTip text="Los archivos se leen directo de tu carpeta vinculada." size={16} position="bottom" /></>}
           </h2>
-          {phase !== 'processing' && phase !== 'scanning' && (
+          {phase !== 'processing' && phase !== 'scanning' && phase !== 'init' && (
             <button onClick={onClose} className="btn-ghost" style={{ fontSize: 18 }}>
               ✕
             </button>
           )}
         </div>
+
+        {/* ===== PHASE: INIT (checking stored handle) ===== */}
+        {phase === 'init' && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3, margin: '0 auto 16px' }} />
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Cargando...</p>
+          </div>
+        )}
+
+        {/* ===== PHASE: NEEDS_FOLDER (no folder linked yet) ===== */}
+        {phase === 'needs_folder' && (
+          <div style={{ textAlign: 'center', padding: '30px 20px' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📂</div>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
+              Seleccioná la carpeta de tu computadora donde tenés tus EPUBs.
+              La app va a leer los archivos directo del disco.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={handleSelectFolder}
+            >
+              Seleccionar carpeta
+            </button>
+          </div>
+        )}
 
         {/* ===== PHASE: SCANNING ===== */}
         {phase === 'scanning' && (

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useBooks } from '../hooks/useBooks';
 import { useAuth } from '../hooks/useAuth';
@@ -44,6 +44,13 @@ export default function Catalog() {
   const [sortBy, setSortBy] = useState('recent');
   const [showImport, setShowImport] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
+  const [librarySupported, setLibrarySupported] = useState(false);
+
+  useEffect(() => {
+    import('../lib/libraryFolder.js')
+      .then((mod) => setLibrarySupported(mod.isLibraryFolderSupported()))
+      .catch(() => setLibrarySupported(false));
+  }, []);
 
   // --- Selection mode state ---
   const [selectionMode, setSelectionMode] = useState(false);
@@ -201,13 +208,15 @@ export default function Catalog() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {!selectionMode && (
             <>
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowImport(true)}
-              >
-                Vincular carpeta
-                <HelpTip text="Vincula una carpeta de tu computadora con EPUBs. Los archivos se leen directo del disco." position="bottom" />
-              </button>
+              {librarySupported && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowImport(true)}
+                >
+                  Vincular carpeta
+                  <HelpTip text="Vincula una carpeta de tu computadora con EPUBs. Los archivos se leen directo del disco." position="bottom" />
+                </button>
+              )}
               {books.some((b) => b.uploadedBy?.uid === user?.uid) && (
                 <Link
                   to="/catalog/batch"
@@ -324,15 +333,24 @@ export default function Catalog() {
           color: 'var(--text-muted)',
         }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>Estanteria vacia</div>
-          <p style={{ marginBottom: 16 }}>
-            Vincula tu carpeta de libros o segui a alguien para ver su biblioteca.
-          </p>
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowImport(true)}
-          >
-            Vincular carpeta
-          </button>
+          {librarySupported ? (
+            <>
+              <p style={{ marginBottom: 16 }}>
+                Vincula tu carpeta de libros o segui a alguien para ver su biblioteca.
+              </p>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowImport(true)}
+              >
+                Vincular carpeta
+              </button>
+            </>
+          ) : (
+            <p style={{ marginBottom: 16 }}>
+              Para agregar libros, abri esta pagina en Chrome o Edge (tu navegador no soporta vincular carpetas).
+              Tambien podes seguir a alguien para ver su biblioteca.
+            </p>
+          )}
         </div>
       )}
 
