@@ -1,49 +1,47 @@
 /**
- * TallyMarks — 5-stick counting system (4 vertical + 1 diagonal = 5)
- * All marks are the same color (--color-tally) regardless of team.
+ * TallyMarks — Square scoring (Argentine truco style)
+ * 1: top, 2: right, 3: bottom, 4: left, 5: diagonal cross
+ * All marks use --color-tally regardless of team.
  */
 
 interface TallyMarksProps {
   points: number;
 }
 
-const TallyGroup = ({ count }: { count: number }) => {
-  // A complete group has 4 verticals + 1 diagonal (= 5 points)
-  // A partial group has 1-4 verticals
-  const sticks = Math.min(count, 4);
-  const hasDiagonal = count >= 5;
+const TallySquare = ({ count }: { count: number }) => {
+  const size = 48;
+  const pad = 6;
+  const sw = 3;
+  const color = 'var(--color-tally)';
 
   return (
-    <div className="relative" style={{ width: 48, height: 56 }}>
-      {/* Vertical sticks */}
-      {Array.from({ length: sticks }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute bottom-0 rounded-sm tally-stick-animate"
-          style={{
-            left: 4 + i * 10,
-            width: 3,
-            height: 48,
-            backgroundColor: 'var(--color-tally)',
-          }}
-        />
-      ))}
-      {/* Diagonal (5th point) */}
-      {hasDiagonal && (
-        <div
-          className="absolute rounded-sm tally-diagonal-animate"
-          style={{
-            width: 52,
-            height: 3,
-            backgroundColor: 'var(--color-tally)',
-            bottom: 24,
-            left: -2,
-            transform: 'rotate(-30deg)',
-            transformOrigin: 'center',
-          }}
-        />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="score-square">
+      {/* 1: Top line */}
+      {count >= 1 && (
+        <line x1={pad} y1={pad} x2={size - pad} y2={pad}
+          stroke={color} strokeWidth={sw} strokeLinecap="round" />
       )}
-    </div>
+      {/* 2: Right line */}
+      {count >= 2 && (
+        <line x1={size - pad} y1={pad} x2={size - pad} y2={size - pad}
+          stroke={color} strokeWidth={sw} strokeLinecap="round" />
+      )}
+      {/* 3: Bottom line */}
+      {count >= 3 && (
+        <line x1={size - pad} y1={size - pad} x2={pad} y2={size - pad}
+          stroke={color} strokeWidth={sw} strokeLinecap="round" />
+      )}
+      {/* 4: Left line */}
+      {count >= 4 && (
+        <line x1={pad} y1={size - pad} x2={pad} y2={pad}
+          stroke={color} strokeWidth={sw} strokeLinecap="round" />
+      )}
+      {/* 5: Diagonal cross */}
+      {count >= 5 && (
+        <line x1={size - pad} y1={pad} x2={pad} y2={size - pad}
+          stroke={color} strokeWidth={sw} strokeLinecap="round" />
+      )}
+    </svg>
   );
 };
 
@@ -54,11 +52,11 @@ export const TallyMarks = ({ points }: TallyMarksProps) => {
   const remainder = points % 5;
 
   return (
-    <div className="flex flex-wrap justify-center gap-4 min-h-[56px] items-end">
+    <div className="flex flex-wrap justify-center gap-2 min-h-[48px] items-center">
       {Array.from({ length: fullGroups }).map((_, i) => (
-        <TallyGroup key={`full-${i}`} count={5} />
+        <TallySquare key={`full-${i}`} count={5} />
       ))}
-      {remainder > 0 && <TallyGroup key="partial" count={remainder} />}
+      {remainder > 0 && <TallySquare key="partial" count={remainder} />}
     </div>
   );
 };
