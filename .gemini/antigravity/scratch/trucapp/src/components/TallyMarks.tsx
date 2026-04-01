@@ -52,7 +52,7 @@ export const TallyMarks = ({ points }: TallyMarksProps) => {
   const remainder = points % 5;
 
   return (
-    <div className="flex flex-wrap justify-center gap-2 min-h-[48px] items-center">
+    <div className="flex flex-col items-center gap-1 min-h-[48px]">
       {Array.from({ length: fullGroups }).map((_, i) => (
         <TallySquare key={`full-${i}`} count={5} />
       ))}
