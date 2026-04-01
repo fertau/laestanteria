@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMatchStore } from '../store/useMatchStore';
 import { TallyMarks } from './TallyMarks';
-import { ShortcutButton } from './ShortcutButton';
 import type { TeamId } from '../types';
 
 function useLongPress(callback: () => void, ms = 500) {
@@ -23,6 +22,23 @@ function useLongPress(callback: () => void, ms = 500) {
         onTouchEnd: () => setStartLongPress(false),
     };
 }
+
+const EyeIcon = ({ open }: { open: boolean }) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {open ? (
+            <>
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+            </>
+        ) : (
+            <>
+                <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+            </>
+        )}
+    </svg>
+);
 
 export const ScoreBoard = () => {
     const teams = useMatchStore(state => state.teams);
@@ -75,36 +91,23 @@ export const ScoreBoard = () => {
             {/* Content */}
             <div className="absolute inset-0 flex flex-col pointer-events-none z-10">
 
-                {/* Big score numbers at top */}
-                <div className="flex items-center pt-6 pb-2 px-4">
+                {/* Team headers */}
+                <div className="flex w-full pt-4 pb-2">
                     <div className="flex-1 text-center">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-nosotros)] mb-1 truncate px-2">
+                        <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-nosotros)] truncate px-2">
                             {teams.nosotros.name}
-                        </div>
-                        <div className={`transition-all duration-200 ${showNumbers ? 'text-[72px] leading-none' : 'text-[40px] leading-none'} font-black text-[var(--color-text-primary)] tabular-nums tracking-[-3px]`}>
-                            {nosScore}
-                        </div>
+                        </h2>
                     </div>
-
-                    {/* Center divider */}
-                    <div className="flex flex-col items-center gap-1 px-2">
-                        <div className="w-[1px] h-8 bg-[var(--color-border)]" />
-                        <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">a {targetScore}</span>
-                        <div className="w-[1px] h-8 bg-[var(--color-border)]" />
-                    </div>
-
+                    <div className="w-[1px]" />
                     <div className="flex-1 text-center">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-ellos)] mb-1 truncate px-2">
+                        <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-ellos)] truncate px-2">
                             {teams.ellos.name}
-                        </div>
-                        <div className={`transition-all duration-200 ${showNumbers ? 'text-[72px] leading-none' : 'text-[40px] leading-none'} font-black text-[var(--color-text-primary)] tabular-nums tracking-[-3px]`}>
-                            {ellScore}
-                        </div>
+                        </h2>
                     </div>
                 </div>
 
                 {/* Malas label */}
-                <div className="flex items-center px-6 mt-2 mb-1">
+                <div className="flex items-center px-6 mb-1">
                     <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
                     <span className="px-3 text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.3em]">Malas</span>
                     <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
@@ -139,38 +142,56 @@ export const ScoreBoard = () => {
                     </div>
                 </div>
 
+                {/* Numeric scores — ghost style, toggleable */}
+                <div className={`flex items-center justify-center gap-4 mt-4 transition-all duration-250 ${showNumbers ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
+                    <span className="text-5xl font-black tabular-nums tracking-tighter leading-none opacity-10">{nosScore}</span>
+                    <span className="text-lg opacity-10">—</span>
+                    <span className="text-5xl font-black tabular-nums tracking-tighter leading-none opacity-10">{ellScore}</span>
+                </div>
+                {showNumbers && (
+                    <div className="text-center mt-0.5">
+                        <span className="text-[10px] text-[var(--color-text-muted)] opacity-40">a {targetScore}</span>
+                    </div>
+                )}
+
+                {/* Eye toggle */}
+                <div className="flex justify-center mt-2 pointer-events-auto">
+                    <button
+                        onClick={() => setShowNumbers(v => !v)}
+                        className="text-[var(--color-text-muted)] p-2 rounded-full active:bg-[var(--color-surface)] transition-colors"
+                    >
+                        <EyeIcon open={showNumbers} />
+                    </button>
+                </div>
+
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* Shortcut buttons */}
+                {/* Point buttons: +1 to +5 per team */}
                 <div className="w-full px-3 grid grid-cols-2 gap-3 pointer-events-auto z-30 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-                    <div className="grid grid-cols-3 gap-1">
-                        <ShortcutButton label="Envido" points={2} type="envido" teamId="nosotros" onAction={() => addPoints('nosotros', 2, 'envido')} />
-                        <ShortcutButton label="Real Env" points={3} type="real_envido" teamId="nosotros" onAction={() => addPoints('nosotros', 3, 'real_envido')} />
-                        <ShortcutButton
-                            label="Falta"
-                            points={ellScore < 15 ? 'MATCH' : `+${30 - ellScore}`}
-                            type="falta_envido"
-                            teamId="nosotros"
-                            onAction={() => window.dispatchEvent(new CustomEvent('requestFaltaEnvido'))}
-                        />
-                        <ShortcutButton label="Truco" points={2} type="truco" teamId="nosotros" onAction={() => addPoints('nosotros', 2, 'truco')} />
-                        <ShortcutButton label="Retruco" points={3} type="retruco" teamId="nosotros" onAction={() => addPoints('nosotros', 3, 'retruco')} />
-                        <ShortcutButton label="Vale 4" points={4} type="vale_cuatro" teamId="nosotros" onAction={() => addPoints('nosotros', 4, 'vale_cuatro')} />
+                    {/* Nosotros */}
+                    <div className="grid grid-cols-5 gap-1">
+                        {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                                key={n}
+                                onClick={(e) => { e.stopPropagation(); addPoints('nosotros', n, 'score_tap'); }}
+                                className="py-3 rounded-md bg-[#4ade80]/8 border border-[#4ade80]/15 text-[#4ade80] font-black text-sm active:scale-95 active:bg-[#4ade80]/20 transition-all"
+                            >
+                                +{n}
+                            </button>
+                        ))}
                     </div>
-                    <div className="grid grid-cols-3 gap-1">
-                        <ShortcutButton label="Envido" points={2} type="envido" teamId="ellos" onAction={() => addPoints('ellos', 2, 'envido')} />
-                        <ShortcutButton label="Real Env" points={3} type="real_envido" teamId="ellos" onAction={() => addPoints('ellos', 3, 'real_envido')} />
-                        <ShortcutButton
-                            label="Falta"
-                            points={nosScore < 15 ? 'MATCH' : `+${30 - nosScore}`}
-                            type="falta_envido"
-                            teamId="ellos"
-                            onAction={() => window.dispatchEvent(new CustomEvent('requestFaltaEnvido'))}
-                        />
-                        <ShortcutButton label="Truco" points={2} type="truco" teamId="ellos" onAction={() => addPoints('ellos', 2, 'truco')} />
-                        <ShortcutButton label="Retruco" points={3} type="retruco" teamId="ellos" onAction={() => addPoints('ellos', 3, 'retruco')} />
-                        <ShortcutButton label="Vale 4" points={4} type="vale_cuatro" teamId="ellos" onAction={() => addPoints('ellos', 4, 'vale_cuatro')} />
+                    {/* Ellos */}
+                    <div className="grid grid-cols-5 gap-1">
+                        {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                                key={n}
+                                onClick={(e) => { e.stopPropagation(); addPoints('ellos', n, 'score_tap'); }}
+                                className="py-3 rounded-md bg-[#fbbf24]/8 border border-[#fbbf24]/15 text-[#fbbf24] font-black text-sm active:scale-95 active:bg-[#fbbf24]/20 transition-all"
+                            >
+                                +{n}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
