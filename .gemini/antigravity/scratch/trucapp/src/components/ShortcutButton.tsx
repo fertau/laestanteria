@@ -9,19 +9,27 @@ export const ShortcutButton = ({
     teamId: TeamId;
     onAction: () => void;
 }) => {
+    const isNosotros = teamId === 'nosotros';
     return (
         <button
-            className="px-1 py-1.5 rounded flex flex-col items-center justify-center gap-0.5 border border-[var(--color-border)] active:scale-95 transition-all min-h-[64px] relative overflow-hidden group bg-[var(--color-surface)] text-[var(--color-text-secondary)] active:bg-[var(--color-surface-hover)]"
+            className={`
+                px-1 py-2 rounded-lg flex flex-col items-center justify-center gap-0.5
+                active:scale-95 transition-all min-h-[56px] relative overflow-hidden
+                border
+                ${isNosotros
+                    ? 'bg-[#4ade80]/8 border-[#4ade80]/15 text-[#4ade80] active:bg-[#4ade80]/15'
+                    : 'bg-[#fbbf24]/8 border-[#fbbf24]/15 text-[#fbbf24] active:bg-[#fbbf24]/15'
+                }
+            `}
             onClick={(e) => {
                 e.stopPropagation();
                 onAction();
             }}
         >
-            <div className="text-[10px] font-bold uppercase tracking-tighter leading-none text-center group-active:scale-90 transition-transform">{label}</div>
-            <div className="text-[11px] font-bold opacity-50 leading-none">
+            <div className="text-[9px] font-bold uppercase tracking-tight leading-none text-center">{label}</div>
+            <div className="text-[11px] font-black opacity-60 leading-none">
                 {typeof points === 'number' ? `+${points}` : points}
             </div>
-            <div className="absolute inset-0 bg-[var(--color-surface)] opacity-0 group-active:opacity-100 transition-opacity" />
         </button>
     );
 };
@@ -35,16 +43,25 @@ export const CompactShortcutButton = ({
     teamId: TeamId;
     onAction: () => void;
 }) => {
+    const isNosotros = teamId === 'nosotros';
     return (
         <button
-            className="px-1 py-1 rounded flex items-center justify-center gap-1 border border-[var(--color-border)] active:scale-95 transition-all min-h-[36px] relative overflow-hidden group text-[9px] bg-[var(--color-surface)] text-[var(--color-text-secondary)] active:bg-[var(--color-surface-hover)]"
+            className={`
+                px-1 py-1 rounded-md flex items-center justify-center gap-1
+                active:scale-95 transition-all min-h-[36px] relative overflow-hidden
+                text-[9px] border
+                ${isNosotros
+                    ? 'bg-[#4ade80]/8 border-[#4ade80]/15 text-[#4ade80] active:bg-[#4ade80]/15'
+                    : 'bg-[#fbbf24]/8 border-[#fbbf24]/15 text-[#fbbf24] active:bg-[#fbbf24]/15'
+                }
+            `}
             onClick={(e) => {
                 e.stopPropagation();
                 onAction();
             }}
         >
-            <span className="font-bold uppercase tracking-tighter leading-none">{label}</span>
-            <span className="font-bold opacity-50 leading-none">
+            <span className="font-bold uppercase tracking-tight leading-none">{label}</span>
+            <span className="font-black opacity-60 leading-none">
                 {typeof points === 'number' ? `+${points}` : points}
             </span>
         </button>

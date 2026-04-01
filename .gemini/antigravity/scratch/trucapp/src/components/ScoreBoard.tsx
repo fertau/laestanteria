@@ -52,105 +52,104 @@ export const ScoreBoard = () => {
         }, 100);
     };
 
+    const nosScore = teams.nosotros.score;
+    const ellScore = teams.ellos.score;
+
     return (
         <div className="flex flex-col w-full h-full relative bg-[var(--color-bg)] overflow-hidden select-none">
 
-            {/* Interaction Layer */}
+            {/* Tap zones */}
             <div className="absolute inset-0 flex z-0">
                 <button
-                    className="flex-1 active:bg-[var(--color-nosotros)]/10 transition-colors outline-none touch-manipulation"
+                    className="flex-1 active:bg-[#4ade80]/5 transition-colors outline-none touch-manipulation"
                     onClick={() => handleColumnClick('nosotros')}
                     {...longPressNosotros}
                 />
-                <div className="w-[1px] bg-[var(--color-border)] opacity-30 h-full" />
                 <button
-                    className="flex-1 active:bg-[var(--color-ellos)]/10 transition-colors outline-none touch-manipulation"
+                    className="flex-1 active:bg-[#fbbf24]/5 transition-colors outline-none touch-manipulation"
                     onClick={() => handleColumnClick('ellos')}
                     {...longPressEllos}
                 />
             </div>
 
-            {/* Visual Layer */}
-            <div className="absolute inset-0 flex flex-col pointer-events-none z-10 py-4">
+            {/* Content */}
+            <div className="absolute inset-0 flex flex-col pointer-events-none z-10">
 
-                {/* Team Headers */}
-                <div className="flex w-full mb-4">
-                    <div className="flex-1 text-center px-2">
-                        <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-nosotros)] truncate">
+                {/* Big score numbers at top */}
+                <div className="flex items-center pt-6 pb-2 px-4">
+                    <div className="flex-1 text-center">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-nosotros)] mb-1 truncate px-2">
                             {teams.nosotros.name}
-                        </h2>
+                        </div>
+                        <div className={`transition-all duration-200 ${showNumbers ? 'text-[72px] leading-none' : 'text-[40px] leading-none'} font-black text-[var(--color-text-primary)] tabular-nums tracking-[-3px]`}>
+                            {nosScore}
+                        </div>
                     </div>
-                    <div className="w-[1px]" />
-                    <div className="flex-1 text-center px-2">
-                        <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--color-ellos)] truncate">
+
+                    {/* Center divider */}
+                    <div className="flex flex-col items-center gap-1 px-2">
+                        <div className="w-[1px] h-8 bg-[var(--color-border)]" />
+                        <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">a {targetScore}</span>
+                        <div className="w-[1px] h-8 bg-[var(--color-border)]" />
+                    </div>
+
+                    <div className="flex-1 text-center">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--color-ellos)] mb-1 truncate px-2">
                             {teams.ellos.name}
-                        </h2>
+                        </div>
+                        <div className={`transition-all duration-200 ${showNumbers ? 'text-[72px] leading-none' : 'text-[40px] leading-none'} font-black text-[var(--color-text-primary)] tabular-nums tracking-[-3px]`}>
+                            {ellScore}
+                        </div>
                     </div>
                 </div>
 
-                {/* Malas Tally */}
-                <div className="flex w-full px-4">
+                {/* Malas label */}
+                <div className="flex items-center px-6 mt-2 mb-1">
+                    <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
+                    <span className="px-3 text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.3em]">Malas</span>
+                    <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
+                </div>
+
+                {/* Malas tally marks */}
+                <div className="flex w-full px-6 py-2">
                     <div className="flex-1 flex justify-center">
-                        <TallyMarks points={Math.min(teams.nosotros.score, 15)} />
+                        <TallyMarks points={Math.min(nosScore, 15)} />
                     </div>
-                    <div className="w-[1px]" />
+                    <div className="w-[1px] bg-[var(--color-border)]/20 mx-2" />
                     <div className="flex-1 flex justify-center">
-                        <TallyMarks points={Math.min(teams.ellos.score, 15)} />
+                        <TallyMarks points={Math.min(ellScore, 15)} />
                     </div>
                 </div>
 
-                {/* Buenas Divider */}
-                <div className="w-full flex items-center justify-center py-4 relative shrink-0">
-                    <div className="absolute w-full h-[1px] bg-[var(--color-border)] opacity-30" />
-                    <div className="bg-[var(--color-bg)] px-3 py-0.5 text-[9px] font-bold text-[var(--color-text-muted)] tracking-[0.3em] border border-[var(--color-border)] rounded-full uppercase z-10">
-                        Buenas
-                    </div>
+                {/* Buenas label */}
+                <div className="flex items-center px-6 mt-2 mb-1">
+                    <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
+                    <span className="px-3 text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-[0.3em]">Buenas</span>
+                    <div className="h-[1px] flex-1 bg-[var(--color-border)]/40" />
                 </div>
 
-                {/* Buenas Tally */}
-                <div className="flex w-full px-4">
+                {/* Buenas tally marks */}
+                <div className="flex w-full px-6 py-2">
                     <div className="flex-1 flex justify-center">
-                        <TallyMarks points={Math.max(0, teams.nosotros.score - 15)} />
+                        <TallyMarks points={Math.max(0, nosScore - 15)} />
                     </div>
-                    <div className="w-[1px]" />
+                    <div className="w-[1px] bg-[var(--color-border)]/20 mx-2" />
                     <div className="flex-1 flex justify-center">
-                        <TallyMarks points={Math.max(0, teams.ellos.score - 15)} />
+                        <TallyMarks points={Math.max(0, ellScore - 15)} />
                     </div>
-                </div>
-
-                {/* Numeric Score (toggleable) */}
-                <div className={`flex items-center justify-center gap-4 mt-4 transition-all duration-200 ${showNumbers ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
-                    <span className="text-[48px] font-black text-[var(--color-text-primary)] tabular-nums tracking-tighter leading-none">{teams.nosotros.score}</span>
-                    <span className="text-xl text-[var(--color-text-muted)] font-light">—</span>
-                    <span className="text-[48px] font-black text-[var(--color-text-primary)] tabular-nums tracking-tighter leading-none">{teams.ellos.score}</span>
-                </div>
-                {showNumbers && (
-                    <div className="text-center mt-1">
-                        <span className="text-[10px] text-[var(--color-text-muted)]">a {targetScore}</span>
-                    </div>
-                )}
-
-                {/* Toggle */}
-                <div className="flex justify-center mt-3 pointer-events-auto">
-                    <button
-                        onClick={() => setShowNumbers(v => !v)}
-                        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full px-3 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)] active:bg-[var(--color-surface-hover)] transition-colors"
-                    >
-                        {showNumbers ? 'Ocultar números' : 'Mostrar números'}
-                    </button>
                 </div>
 
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* Controls */}
-                <div className="mt-auto w-full px-2 grid grid-cols-2 gap-4 pointer-events-auto z-30 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                {/* Shortcut buttons */}
+                <div className="w-full px-3 grid grid-cols-2 gap-3 pointer-events-auto z-30 pb-[calc(env(safe-area-inset-bottom)+12px)]">
                     <div className="grid grid-cols-3 gap-1">
                         <ShortcutButton label="Envido" points={2} type="envido" teamId="nosotros" onAction={() => addPoints('nosotros', 2, 'envido')} />
-                        <ShortcutButton label="Real Envido" points={3} type="real_envido" teamId="nosotros" onAction={() => addPoints('nosotros', 3, 'real_envido')} />
+                        <ShortcutButton label="Real Env" points={3} type="real_envido" teamId="nosotros" onAction={() => addPoints('nosotros', 3, 'real_envido')} />
                         <ShortcutButton
-                            label="Falta Envido"
-                            points={teams.ellos.score < 15 ? 'MATCH' : `+${30 - teams.ellos.score}`}
+                            label="Falta"
+                            points={ellScore < 15 ? 'MATCH' : `+${30 - ellScore}`}
                             type="falta_envido"
                             teamId="nosotros"
                             onAction={() => window.dispatchEvent(new CustomEvent('requestFaltaEnvido'))}
@@ -161,10 +160,10 @@ export const ScoreBoard = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-1">
                         <ShortcutButton label="Envido" points={2} type="envido" teamId="ellos" onAction={() => addPoints('ellos', 2, 'envido')} />
-                        <ShortcutButton label="Real Envido" points={3} type="real_envido" teamId="ellos" onAction={() => addPoints('ellos', 3, 'real_envido')} />
+                        <ShortcutButton label="Real Env" points={3} type="real_envido" teamId="ellos" onAction={() => addPoints('ellos', 3, 'real_envido')} />
                         <ShortcutButton
-                            label="Falta Envido"
-                            points={teams.nosotros.score < 15 ? 'MATCH' : `+${30 - teams.nosotros.score}`}
+                            label="Falta"
+                            points={nosScore < 15 ? 'MATCH' : `+${30 - nosScore}`}
                             type="falta_envido"
                             teamId="ellos"
                             onAction={() => window.dispatchEvent(new CustomEvent('requestFaltaEnvido'))}
