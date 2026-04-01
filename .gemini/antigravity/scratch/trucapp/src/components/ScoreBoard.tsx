@@ -167,27 +167,27 @@ export const ScoreBoard = () => {
                 {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* Point buttons: +1 to +5 per team */}
-                <div className="w-full px-3 grid grid-cols-2 gap-3 pointer-events-auto z-30 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+                {/* Point buttons: 2x2 grid per team */}
+                <div className="w-full px-4 grid grid-cols-2 gap-4 pointer-events-auto z-30 pb-[calc(env(safe-area-inset-bottom)+12px)]">
                     {/* Nosotros */}
-                    <div className="grid grid-cols-5 gap-1">
-                        {[1, 2, 3, 4, 5].map(n => (
+                    <div className="grid grid-cols-2 gap-1.5">
+                        {[1, 2, 3, 4].map(n => (
                             <button
                                 key={n}
                                 onClick={(e) => { e.stopPropagation(); addPoints('nosotros', n, 'score_tap'); }}
-                                className="py-3 rounded-md bg-[#4ade80]/8 border border-[#4ade80]/15 text-[#4ade80] font-black text-sm active:scale-95 active:bg-[#4ade80]/20 transition-all"
+                                className="py-3.5 rounded-lg bg-[#4ade80]/8 border border-[#4ade80]/15 text-[#4ade80] font-black text-base active:scale-95 active:bg-[#4ade80]/20 transition-all"
                             >
                                 +{n}
                             </button>
                         ))}
                     </div>
                     {/* Ellos */}
-                    <div className="grid grid-cols-5 gap-1">
-                        {[1, 2, 3, 4, 5].map(n => (
+                    <div className="grid grid-cols-2 gap-1.5">
+                        {[1, 2, 3, 4].map(n => (
                             <button
                                 key={n}
                                 onClick={(e) => { e.stopPropagation(); addPoints('ellos', n, 'score_tap'); }}
-                                className="py-3 rounded-md bg-[#fbbf24]/8 border border-[#fbbf24]/15 text-[#fbbf24] font-black text-sm active:scale-95 active:bg-[#fbbf24]/20 transition-all"
+                                className="py-3.5 rounded-lg bg-[#fbbf24]/8 border border-[#fbbf24]/15 text-[#fbbf24] font-black text-base active:scale-95 active:bg-[#fbbf24]/20 transition-all"
                             >
                                 +{n}
                             </button>
