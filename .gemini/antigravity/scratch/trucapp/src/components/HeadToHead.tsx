@@ -60,15 +60,15 @@ export const HeadToHead = ({ mode }: HeadToHeadProps) => {
     return (
         <div className="flex flex-col gap-8 w-full max-w-sm mx-auto animate-in fade-in duration-500">
             {/* Big Summary Card */}
-            <div className="bg-gradient-to-br from-[#1a1a1c] to-[#0a0a0c] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
+            <div className="bg-gradient-to-br from-[#1a1a1c] to-[#0a0a0c] p-8 rounded-[2.5rem] border border-[var(--color-border)] shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-accent)]/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -ml-8 -mb-8"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-[var(--color-surface)] rounded-full blur-2xl -ml-8 -mb-8"></div>
 
                 <div className="flex justify-between items-end mb-8 relative z-10">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase text-white/20 tracking-[0.3em] mb-1">Efectividad</span>
+                        <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-[0.3em] mb-1">Efectividad</span>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-6xl font-black tracking-tighter text-white italic">{winRate}</span>
+                            <span className="text-6xl font-black tracking-tighter text-[var(--color-text-primary)] italic">{winRate}</span>
                             <span className="text-2xl font-black text-[var(--color-accent)]">%</span>
                         </div>
                     </div>
@@ -76,22 +76,22 @@ export const HeadToHead = ({ mode }: HeadToHeadProps) => {
                         <span className={`text-xl font-black ${diff >= 0 ? 'text-[var(--color-nosotros)]' : 'text-[var(--color-ellos)]'}`}>
                             {diff >= 0 ? `+${diff}` : diff}
                         </span>
-                        <span className="text-[8px] font-black uppercase text-white/20 tracking-widest">Balance Pts</span>
+                        <span className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">Balance Pts</span>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 relative z-10">
-                    <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col items-center">
-                        <span className="text-lg font-black text-white">{wins}</span>
-                        <span className="text-[7px] font-black uppercase text-white/20 tracking-widest">Wins</span>
+                    <div className="bg-[var(--color-surface)] p-4 rounded-3xl border border-[var(--color-border)] flex flex-col items-center">
+                        <span className="text-lg font-black text-[var(--color-text-primary)]">{wins}</span>
+                        <span className="text-[7px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">Wins</span>
                     </div>
-                    <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col items-center">
-                        <span className="text-lg font-black text-white">{losses}</span>
-                        <span className="text-[7px] font-black uppercase text-white/20 tracking-widest">Losses</span>
+                    <div className="bg-[var(--color-surface)] p-4 rounded-3xl border border-[var(--color-border)] flex flex-col items-center">
+                        <span className="text-lg font-black text-[var(--color-text-primary)]">{losses}</span>
+                        <span className="text-[7px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">Losses</span>
                     </div>
-                    <div className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col items-center">
-                        <span className="text-lg font-black text-white">{total}</span>
-                        <span className="text-[7px] font-black uppercase text-white/20 tracking-widest">Total</span>
+                    <div className="bg-[var(--color-surface)] p-4 rounded-3xl border border-[var(--color-border)] flex flex-col items-center">
+                        <span className="text-lg font-black text-[var(--color-text-primary)]">{total}</span>
+                        <span className="text-[7px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">Total</span>
                     </div>
                 </div>
             </div>
@@ -100,19 +100,19 @@ export const HeadToHead = ({ mode }: HeadToHeadProps) => {
             {(topRivalId || topPartnerId) && (
                 <div className="grid grid-cols-2 gap-4">
                     {topRivalId && (
-                        <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5">
-                            <span className="text-[8px] font-black uppercase text-white/20 tracking-[0.2em] mb-3 block">Hijo Favorito</span>
+                        <div className="bg-[var(--color-surface)] p-5 rounded-[2rem] border border-[var(--color-border)]">
+                            <span className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-[0.2em] mb-3 block">Hijo Favorito</span>
                             <div className="flex flex-col">
-                                <span className="text-xs font-black uppercase text-white truncate">{getPlayerName(topRivalId)}</span>
+                                <span className="text-xs font-black uppercase text-[var(--color-text-primary)] truncate">{getPlayerName(topRivalId)}</span>
                                 <span className="text-[8px] font-black uppercase text-[var(--color-ellos)] tracking-widest mt-0.5">{rivalsMap[topRivalId]} Cruces</span>
                             </div>
                         </div>
                     )}
                     {topPartnerId && (
-                        <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5">
-                            <span className="text-[8px] font-black uppercase text-white/20 tracking-[0.2em] mb-3 block">Dúo Dinámico</span>
+                        <div className="bg-[var(--color-surface)] p-5 rounded-[2rem] border border-[var(--color-border)]">
+                            <span className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-[0.2em] mb-3 block">Dúo Dinámico</span>
                             <div className="flex flex-col">
-                                <span className="text-xs font-black uppercase text-white truncate">{getPlayerName(topPartnerId)}</span>
+                                <span className="text-xs font-black uppercase text-[var(--color-text-primary)] truncate">{getPlayerName(topPartnerId)}</span>
                                 <span className="text-[8px] font-black uppercase text-[var(--color-nosotros)] tracking-widest mt-0.5">{partnersMap[topPartnerId]} Juntos</span>
                             </div>
                         </div>
@@ -122,7 +122,7 @@ export const HeadToHead = ({ mode }: HeadToHeadProps) => {
 
             {/* Form / Streak */}
             <div className="flex flex-col gap-3 px-2">
-                <h4 className="text-[8px] font-black text-white/20 uppercase tracking-[0.4em] ml-2">Racha</h4>
+                <h4 className="text-[8px] font-black text-[var(--color-text-muted)] uppercase tracking-[0.4em] ml-2">Racha</h4>
                 <div className="flex gap-2 overflow-x-auto pb-2 px-1 no-scrollbar">
                     {userMatches.slice(0, 8).map(m => {
                         const isNosotros = m.teams.nosotros.players.includes(currentUserId!);
@@ -139,7 +139,7 @@ export const HeadToHead = ({ mode }: HeadToHeadProps) => {
                         );
                     })}
                     {userMatches.length === 0 && (
-                        <div className="w-full text-center py-4 text-[10px] font-black text-white/10 uppercase tracking-widest">Sin datos</div>
+                        <div className="w-full text-center py-4 text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">Sin datos</div>
                     )}
                 </div>
             </div>

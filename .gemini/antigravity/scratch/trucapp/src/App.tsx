@@ -138,6 +138,13 @@ function App() {
     }
   }, []);
 
+  // Auth Guard — must be before any conditional returns
+  useEffect(() => {
+    if (!currentUserId && (step !== 'AUTH' && step !== 'HOME')) {
+      setStep('AUTH');
+    }
+  }, [currentUserId, step]);
+
   const handleSplashFinish = () => {
     sessionStorage.setItem('trucapp-splash-seen', 'true');
     setShowSplash(false);
@@ -151,10 +158,8 @@ function App() {
     addMatchToHistory(matchState);
 
     if (isPicaPica) {
-      // Reset pica-pica state
       picaPicaReset();
     } else {
-      // V2: Record Pair Results (standard matches)
       if (matchState.pairs) {
         if (matchState.pairs.nosotros && matchState.winner) {
           recordPairResult(matchState.pairs.nosotros, matchState.winner === 'nosotros');
@@ -172,13 +177,6 @@ function App() {
   if (showSplash) {
     return <SplashScreen onFinish={handleSplashFinish} />;
   }
-
-  // Auth Guard
-  useEffect(() => {
-    if (!currentUserId && (step !== 'AUTH' && step !== 'HOME')) {
-      setStep('AUTH');
-    }
-  }, [currentUserId, step]);
 
   if (!currentUserId) {
     return <AccountSelector onLoginSuccess={() => setStep('HOME')} />;

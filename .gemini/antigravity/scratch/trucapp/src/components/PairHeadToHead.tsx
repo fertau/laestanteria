@@ -23,7 +23,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
     if (!pairAId || !pairBId) {
         return (
             <div className="full-screen bg-[var(--color-bg)] flex flex-col p-4">
-                <button onClick={onBack} className="text-[var(--color-text-muted)] font-bold mb-6 self-start px-2 py-1 rounded hover:bg-white/5 transition-colors">← VOLVER</button>
+                <button onClick={onBack} className="text-[var(--color-text-muted)] font-bold mb-6 self-start px-2 py-1 rounded hover:bg-[var(--color-surface)] transition-colors">← VOLVER</button>
                 <div className="flex flex-col items-center mb-8">
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter">COMPARAR PAREJAS</h2>
                     <p className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-[0.3em]">Módulo Estadístico</p>
@@ -33,7 +33,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                     <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-black uppercase text-[var(--color-nosotros)] tracking-widest pl-1">Pareja 1</label>
                         <select
-                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-2xl text-white font-bold outline-none focus:border-[var(--color-nosotros)]"
+                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-2xl text-[var(--color-text-primary)] font-bold outline-none focus:border-[var(--color-nosotros)]"
                             value={pairAId}
                             onChange={(e) => setPairAId(e.target.value)}
                         >
@@ -49,7 +49,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                     <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-black uppercase text-[var(--color-ellos)] tracking-widest pl-1">Pareja 2</label>
                         <select
-                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-2xl text-white font-bold outline-none focus:border-[var(--color-ellos)]"
+                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-2xl text-[var(--color-text-primary)] font-bold outline-none focus:border-[var(--color-ellos)]"
                             value={pairBId}
                             onChange={(e) => setPairBId(e.target.value)}
                         >
@@ -64,7 +64,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                 </div>
 
                 {matches.length === 0 && (
-                    <div className="mt-12 text-center p-8 bg-white/5 rounded-3xl border border-dashed border-white/10">
+                    <div className="mt-12 text-center p-8 bg-[var(--color-surface)] rounded-3xl border border-dashed border-[var(--color-border)]">
                         <p className="text-sm text-[var(--color-text-muted)] font-medium">No hay registros de partidos con parejas aún.</p>
                     </div>
                 )}
@@ -79,7 +79,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
     return (
         <div className="full-screen bg-[var(--color-bg)] flex flex-col p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
-                <button onClick={() => { setPairAId(''); setPairBId(''); }} className="text-[var(--color-text-muted)] font-bold text-xs uppercase tracking-widest bg-white/5 py-2 px-4 rounded-full active:scale-95 transition-all">
+                <button onClick={() => { setPairAId(''); setPairBId(''); }} className="text-[var(--color-text-muted)] font-bold text-xs uppercase tracking-widest bg-[var(--color-surface)] py-2 px-4 rounded-full active:scale-95 transition-all">
                     ← Nueva Consulta
                 </button>
             </div>
@@ -122,8 +122,8 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                         <div className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)] mt-2">Win</div>
                     </div>
                     <div className="flex flex-col items-center px-4">
-                        <div className="text-xl font-black text-white/20 mb-2 tabular-nums">{totalMatches}</div>
-                        <div className="text-[8px] font-black uppercase text-white/10 tracking-widest">PJ</div>
+                        <div className="text-xl font-black text-[var(--color-text-muted)] mb-2 tabular-nums">{totalMatches}</div>
+                        <div className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">PJ</div>
                     </div>
                     <div className="flex-1 text-center">
                         <div className="text-6xl font-black text-[var(--color-ellos)] tabular-nums tracking-tighter">{sideBWins}</div>
@@ -131,7 +131,7 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-6 border-t border-white/5 pt-8">
+                <div className="flex flex-col gap-6 border-t border-[var(--color-border)] pt-8">
                     {/* Point Differential */}
                     <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest px-2">
                         <span className="text-[var(--color-text-muted)]">Diferencia PTOS</span>
@@ -144,10 +144,10 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between text-[11px] font-black tabular-nums">
                             <span className="text-[var(--color-nosotros)]">{winRateA}%</span>
-                            <span className="text-white/20 uppercase tracking-[0.2em] text-[8px]">Efectividad</span>
+                            <span className="text-[var(--color-text-muted)] uppercase tracking-[0.2em] text-[8px]">Efectividad</span>
                             <span className="text-[var(--color-ellos)]">{winRateB}%</span>
                         </div>
-                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden flex">
+                        <div className="h-1.5 w-full bg-[var(--color-surface)] rounded-full overflow-hidden flex">
                             <div className="h-full bg-[var(--color-nosotros)] transition-all duration-1000" style={{ width: `${winRateA}%` }}></div>
                             <div className="h-full bg-[var(--color-ellos)] transition-all duration-1000" style={{ width: `${winRateB}%` }}></div>
                         </div>
@@ -168,22 +168,22 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                                     </div>
                                 );
                             })}
-                            {recentMatches.length === 0 && <span className="text-[10px] font-medium text-white/20 italic">Sin registros recientes</span>}
+                            {recentMatches.length === 0 && <span className="text-[10px] font-medium text-[var(--color-text-muted)] italic">Sin registros recientes</span>}
                         </div>
-                        <div className="text-[9px] font-black uppercase text-white/20 tracking-[0.2em]">Trayectoria Reciente</div>
+                        <div className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-[0.2em]">Trayectoria Reciente</div>
                     </div>
                 </div>
             </div>
 
             <div className="flex items-center gap-4 mb-6 pl-2">
-                <div className="h-[1px] flex-1 bg-white/5"></div>
+                <div className="h-[1px] flex-1 bg-[var(--color-surface)]"></div>
                 <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-[0.3em]">Hojas de Carpeta</h3>
-                <div className="h-[1px] flex-1 bg-white/5"></div>
+                <div className="h-[1px] flex-1 bg-[var(--color-surface)]"></div>
             </div>
 
             <div className="flex flex-col gap-4 pb-12">
                 {recentMatches.length === 0 ? (
-                    <p className="text-center text-xs font-medium text-white/20 py-8 italic">No hay partidos disputados todavía.</p>
+                    <p className="text-center text-xs font-medium text-[var(--color-text-muted)] py-8 italic">No hay partidos disputados todavía.</p>
                 ) : (
                     recentMatches.map(m => {
                         const date = new Date(m.metadata?.date || m.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
@@ -194,14 +194,14 @@ export const PairHeadToHead = ({ onBack }: { onBack: () => void }) => {
                         return (
                             <div key={m.id} className="bg-[var(--color-surface)] p-5 rounded-3xl border border-[var(--color-border)] flex justify-between items-center shadow-lg active:scale-[0.98] transition-all">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter">{date}</span>
-                                    <span className="text-[11px] font-bold text-white/20 uppercase tracking-widest truncate max-w-[80px]">{loc}</span>
+                                    <span className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-tighter">{date}</span>
+                                    <span className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest truncate max-w-[80px]">{loc}</span>
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <div className="flex items-center gap-3">
-                                        <span className={`text-2xl font-black tabular-nums ${isWinA ? 'text-white' : 'text-white/20'}`}>{m.teams.nosotros.score}</span>
-                                        <span className="text-[10px] font-black text-white/10 italic">vs</span>
-                                        <span className={`text-2xl font-black tabular-nums ${!isWinA ? 'text-white' : 'text-white/20'}`}>{m.teams.ellos.score}</span>
+                                        <span className={`text-2xl font-black tabular-nums ${isWinA ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>{m.teams.nosotros.score}</span>
+                                        <span className="text-[10px] font-black text-[var(--color-text-muted)] italic">vs</span>
+                                        <span className={`text-2xl font-black tabular-nums ${!isWinA ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>{m.teams.ellos.score}</span>
                                     </div>
                                     <span className={`text-[8px] font-black uppercase mt-1 tracking-widest ${isWinA ? 'text-[var(--color-nosotros)]' : 'text-[var(--color-ellos)]'}`}>
                                         {isWinA ? 'Ganó ' + pairA?.name.split(' ')[0] : 'Ganó ' + pairB?.name.split(' ')[0]}

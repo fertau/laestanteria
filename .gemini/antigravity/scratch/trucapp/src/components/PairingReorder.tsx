@@ -32,7 +32,7 @@ export const PairingReorder = ({ onConfirm }: PairingReorderProps) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[var(--color-bg)]/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] w-full max-w-sm p-4">
                 <h3 className="text-center font-bold text-sm uppercase tracking-wider mb-1">
                     Emparejar jugadores

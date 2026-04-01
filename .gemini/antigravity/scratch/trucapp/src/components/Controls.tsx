@@ -64,13 +64,13 @@ const ShortcutButton = ({ label, points, type }: { label: string, points: number
         return (
             <div className="flex gap-1 animate-in fade-in zoom-in duration-200 w-full h-[46px]">
                 <button
-                    className="flex-1 bg-[var(--color-nosotros)] text-white text-xs font-bold rounded active:scale-95"
+                    className="flex-1 bg-[var(--color-nosotros)] text-[var(--color-text-primary)] text-xs font-bold rounded active:scale-95"
                     onClick={() => { addPoints('nosotros', points, type); setIsOpen(false); }}
                 >
                     NOS
                 </button>
                 <button
-                    className="flex-1 bg-[var(--color-ellos)] text-white text-xs font-bold rounded active:scale-95"
+                    className="flex-1 bg-[var(--color-ellos)] text-[var(--color-text-primary)] text-xs font-bold rounded active:scale-95"
                     onClick={() => { addPoints('ellos', points, type); setIsOpen(false); }}
                 >
                     ELL

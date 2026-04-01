@@ -118,7 +118,7 @@ export const PicaPicaSetup = ({ nosotros, ellos, onStart }: PicaPicaSetupProps) 
 
             <button
                 onClick={handleStart}
-                className="w-full bg-[var(--color-accent)] text-white py-4 rounded font-bold text-xl shadow-lg active:scale-95 transition-all"
+                className="w-full bg-[var(--color-accent)] text-[var(--color-text-primary)] py-4 rounded font-bold text-xl shadow-lg active:scale-95 transition-all"
             >
                 Empezar Pica-Pica
             </button>

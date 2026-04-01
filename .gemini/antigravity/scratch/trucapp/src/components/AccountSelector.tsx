@@ -116,7 +116,7 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
 
         return (
             <div className="full-screen bg-[var(--color-bg)] flex flex-col p-6 items-center justify-center overflow-y-auto">
-                <h1 className="text-4xl font-black tracking-tighter mb-2 text-center text-white italic">TRUCAPP</h1>
+                <h1 className="text-4xl font-black tracking-tighter mb-2 text-center text-[var(--color-text-primary)] italic">TRUCAPP</h1>
                 <p className="text-[var(--color-text-muted)] mb-12 uppercase tracking-widest text-xs font-bold">Seleccioná tu perfil</p>
 
                 {rememberedUsers.length > 0 ? (
@@ -125,18 +125,18 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
                             <div key={user.id} className="relative group">
                                 <button
                                     onClick={() => { setSelectedUser(user); setMode('login'); }}
-                                    className="w-full aspect-square flex flex-col items-center justify-center gap-3 bg-[var(--color-surface)] rounded-[2.5rem] border border-[var(--color-border)] active:scale-95 transition-all shadow-xl hover:bg-white/5"
+                                    className="w-full aspect-square flex flex-col items-center justify-center gap-3 bg-[var(--color-surface)] rounded-[2.5rem] border border-[var(--color-border)] active:scale-95 transition-all shadow-xl hover:bg-[var(--color-surface)]"
                                 >
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[#1d4ed8] flex items-center justify-center font-black text-white text-2xl shadow-lg">
+                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[#1d4ed8] flex items-center justify-center font-black text-[var(--color-text-primary)] text-2xl shadow-lg">
                                         {user.avatar || user.name.substring(0, 1).toUpperCase()}
                                     </div>
-                                    <div className="font-black text-xs text-white uppercase tracking-tight truncate w-full px-4 text-center">
+                                    <div className="font-black text-xs text-[var(--color-text-primary)] uppercase tracking-tight truncate w-full px-4 text-center">
                                         {user.nickname || user.name}
                                     </div>
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); removeRememberedAccount(user.id); }}
-                                    className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-400/30 transition-all z-10 text-[10px]"
+                                    className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-[var(--color-bg)]/60 backdrop-blur-md border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-400/30 transition-all z-10 text-[10px]"
                                     title="Quitar de este dispositivo"
                                 >
                                     ✕
@@ -145,8 +145,8 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
                         ))}
                     </div>
                 ) : (
-                    <div className="mb-12 p-8 text-center bg-white/5 rounded-[2.5rem] border border-dashed border-white/10 w-full max-w-sm">
-                        <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest leading-relaxed">
+                    <div className="mb-12 p-8 text-center bg-[var(--color-surface)] rounded-[2.5rem] border border-dashed border-[var(--color-border)] w-full max-w-sm">
+                        <p className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest leading-relaxed">
                             No hay cuentas recordadas en este dispositivo
                         </p>
                     </div>
@@ -163,7 +163,7 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
 
                     <button
                         onClick={() => { setSelectedUser(null); setMode('login'); }}
-                        className="bg-white/5 border border-white/10 py-4 rounded-[1.5rem] text-white/40 font-bold text-[10px] uppercase tracking-widest hover:bg-white/10 active:scale-95 transition-all text-center"
+                        className="bg-[var(--color-surface)] border border-[var(--color-border)] py-4 rounded-[1.5rem] text-[var(--color-text-muted)] font-bold text-[10px] uppercase tracking-widest hover:bg-[var(--color-surface-hover)] active:scale-95 transition-all text-center"
                     >
                         Ya tengo cuenta / Buscar
                     </button>
@@ -185,10 +185,10 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
             return (
                 <div className="full-screen bg-[var(--color-bg)] flex flex-col p-6">
                     <button onClick={resetState} className="self-start text-[var(--color-text-muted)] mb-6 font-bold">← Volver</button>
-                    <h2 className="text-2xl font-black text-white mb-6">¿Quién sos?</h2>
+                    <h2 className="text-2xl font-black text-[var(--color-text-primary)] mb-6">¿Quién sos?</h2>
 
                     <input
-                        className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-xl text-white mb-6 focus:border-[var(--color-accent)] focus:outline-none"
+                        className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-xl text-[var(--color-text-primary)] mb-6 focus:border-[var(--color-accent)] focus:outline-none"
                         placeholder="Buscar tu nombre..."
                         value={search}
                         autoFocus
@@ -205,7 +205,7 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
                                 <div className="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center font-bold text-[var(--color-text-secondary)]">
                                     {(user?.name || '?').substring(0, 2).toUpperCase()}
                                 </div>
-                                <span className="font-bold text-white">{user?.name || 'Sin nombre'}</span>
+                                <span className="font-bold text-[var(--color-text-primary)]">{user?.name || 'Sin nombre'}</span>
                             </button>
                         ))}
                         {filtered.length === 0 && (
@@ -224,10 +224,10 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
             <div className="full-screen bg-[var(--color-bg)] flex flex-col items-center justify-center p-8">
                 <button onClick={() => setSelectedUser(null)} className="absolute top-8 left-8 text-[var(--color-text-muted)] font-bold">← Cambiar usuario</button>
 
-                <div className="w-20 h-20 rounded-full bg-[var(--color-surface)] flex items-center justify-center font-black text-3xl text-white mb-6 border-2 border-[var(--color-border)]">
+                <div className="w-20 h-20 rounded-full bg-[var(--color-surface)] flex items-center justify-center font-black text-3xl text-[var(--color-text-primary)] mb-6 border-2 border-[var(--color-border)]">
                     {selectedUser.name.substring(0, 2).toUpperCase()}
                 </div>
-                <h2 className="text-2xl font-black text-white mb-2">{selectedUser.name}</h2>
+                <h2 className="text-2xl font-black text-[var(--color-text-primary)] mb-2">{selectedUser.name}</h2>
                 <p className="text-sm text-[var(--color-text-muted)] mb-8">Ingresá tu PIN para entrar</p>
 
                 <div className={`${shakeError ? 'animate-shake' : ''}`}>
@@ -242,7 +242,7 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
                 {error && <div className={`mt-6 font-bold ${error.includes('encontramos') ? 'text-[var(--color-accent)]' : 'text-red-500'}`}>{error}</div>}
                 {!error && <div className="h-6 mt-6"></div>} {/* Spacer */}
 
-                <button onClick={() => handleLoginSubmit()} className="mt-8 bg-[var(--color-accent)] text-white font-bold py-3 px-8 rounded-xl disabled:opacity-50" disabled={loginPin.length !== 4}>
+                <button onClick={() => handleLoginSubmit()} className="mt-8 bg-[var(--color-accent)] text-[var(--color-text-primary)] font-bold py-3 px-8 rounded-xl disabled:opacity-50" disabled={loginPin.length !== 4}>
                     Ingresar
                 </button>
             </div>
@@ -256,22 +256,22 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
 
                 {createStep === 'name' ? (
                     <>
-                        <h2 className="text-2xl font-black text-white mb-2">Crear Cuenta</h2>
+                        <h2 className="text-2xl font-black text-[var(--color-text-primary)] mb-2">Crear Cuenta</h2>
                         <p className="text-sm text-[var(--color-text-muted)] mb-8">¿Cómo querés llamarte?</p>
                         <input
                             value={newName}
                             onChange={e => setNewName(e.target.value)}
-                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 text-center text-xl text-white rounded-xl w-full max-w-xs mb-6 focus:border-[var(--color-accent)] outline-none"
+                            className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 text-center text-xl text-[var(--color-text-primary)] rounded-xl w-full max-w-xs mb-6 focus:border-[var(--color-accent)] outline-none"
                             placeholder="Tu Nombre"
                             autoFocus
                         />
-                        <button onClick={handleCreateNameSubmit} className="bg-[var(--color-accent)] text-white font-bold py-3 px-8 rounded-xl">
+                        <button onClick={handleCreateNameSubmit} className="bg-[var(--color-accent)] text-[var(--color-text-primary)] font-bold py-3 px-8 rounded-xl">
                             Siguiente
                         </button>
                     </>
                 ) : (
                     <>
-                        <h2 className="text-2xl font-black text-white mb-2">Creá tu PIN</h2>
+                        <h2 className="text-2xl font-black text-[var(--color-text-primary)] mb-2">Creá tu PIN</h2>
                         <p className="text-sm text-[var(--color-text-muted)] mb-8">4 números para entrar</p>
                         <PinInput
                             value={newPin}
@@ -279,7 +279,7 @@ export const AccountSelector = ({ onLoginSuccess }: AccountSelectorProps) => {
                             autoFocus
                             onComplete={() => { /* Wait for button? Or auto? Let's wait for button to confirm visual */ }}
                         />
-                        <button onClick={handleCreateComplete} disabled={newPin.length !== 4} className="mt-8 bg-[var(--color-accent)] text-white font-bold py-3 px-8 rounded-xl disabled:opacity-50">
+                        <button onClick={handleCreateComplete} disabled={newPin.length !== 4} className="mt-8 bg-[var(--color-accent)] text-[var(--color-text-primary)] font-bold py-3 px-8 rounded-xl disabled:opacity-50">
                             Crear y Entrar
                         </button>
                     </>

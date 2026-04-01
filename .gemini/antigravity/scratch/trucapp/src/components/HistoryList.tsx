@@ -16,7 +16,7 @@ export const HistoryList = ({ filter }: HistoryListProps) => {
 
     if (filteredMatches.length === 0) {
         return (
-            <div className="text-center text-[var(--color-text-muted)] py-12 px-8 bg-white/5 rounded-3xl border border-dashed border-white/5 mt-4">
+            <div className="text-center text-[var(--color-text-muted)] py-12 px-8 bg-[var(--color-surface)] rounded-3xl border border-dashed border-[var(--color-border)] mt-4">
                 <span className="text-2xl block mb-2 opacity-20">📭</span>
                 <p className="text-[10px] font-black uppercase tracking-widest opacity-20">No hay partidos en esta categoría</p>
             </div>
@@ -32,7 +32,7 @@ export const HistoryList = ({ filter }: HistoryListProps) => {
                 const isUserWin = match.winner === (isNosotros ? 'nosotros' : 'ellos');
 
                 return (
-                    <div key={match.id} className="bg-[#1a1a1c] p-5 rounded-[2.5rem] border border-white/5 flex justify-between items-center shadow-xl active:scale-[0.99] transition-all hover:bg-white/[0.03] group relative overflow-hidden">
+                    <div key={match.id} className="bg-[#1a1a1c] p-5 rounded-[2.5rem] border border-[var(--color-border)] flex justify-between items-center shadow-xl active:scale-[0.99] transition-all hover:bg-[var(--color-surface)] group relative overflow-hidden">
                         <div className="flex items-center gap-5 relative z-10">
                             <div className={`w-12 h-12 rounded-[1.25rem] flex flex-col items-center justify-center font-black transition-all border ${isUserWin
                                 ? 'bg-[var(--color-nosotros)]/10 text-[var(--color-nosotros)] border-[var(--color-nosotros)]/20'
@@ -42,9 +42,9 @@ export const HistoryList = ({ filter }: HistoryListProps) => {
 
                             <div className="flex flex-col">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">{match.mode}</span>
-                                    <span className="w-1 h-1 rounded-full bg-white/10"></span>
-                                    <span className="text-[8px] font-black uppercase text-white/40 tracking-widest">
+                                    <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">{match.mode}</span>
+                                    <span className="w-1 h-1 rounded-full bg-[var(--color-surface-hover)]"></span>
+                                    <span className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-widest">
                                         {new Date(match.startDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
                                     </span>
                                 </div>
@@ -52,18 +52,18 @@ export const HistoryList = ({ filter }: HistoryListProps) => {
                                 <div className="flex items-center gap-3">
                                     <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-base font-black tabular-nums ${isUserWin ? 'text-white' : 'text-white/40'}`}>
+                                            <span className={`text-base font-black tabular-nums ${isUserWin ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                                                 {userTeam.score}
                                             </span>
-                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${isUserWin ? 'text-white/80' : 'text-white/30'}`}>
+                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${isUserWin ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}>
                                                 {userTeam.name}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-base font-black tabular-nums ${!isUserWin ? 'text-white' : 'text-white/40'}`}>
+                                            <span className={`text-base font-black tabular-nums ${!isUserWin ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                                                 {oppTeam.score}
                                             </span>
-                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${!isUserWin ? 'text-white/80' : 'text-white/30'}`}>
+                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${!isUserWin ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}>
                                                 {oppTeam.name}
                                             </span>
                                         </div>
@@ -76,7 +76,7 @@ export const HistoryList = ({ filter }: HistoryListProps) => {
                             <span className={`text-[10px] font-black uppercase tracking-widest ${isUserWin ? 'text-[var(--color-nosotros)]' : 'text-[var(--color-ellos)]'}`}>
                                 {isUserWin ? 'Ganaste' : 'Perdiste'}
                             </span>
-                            <span className="text-[8px] font-black uppercase text-white/20 tracking-widest mt-0.5">
+                            <span className="text-[8px] font-black uppercase text-[var(--color-text-muted)] tracking-widest mt-0.5">
                                 Dif. {Math.abs(userTeam.score - oppTeam.score)}
                             </span>
                         </div>

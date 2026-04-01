@@ -238,7 +238,7 @@ const ManualScoreModal = ({ nosotros, ellos, onClose, onConfirm }: {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-6 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-[var(--color-bg)]/95 flex flex-col items-center justify-center p-6 backdrop-blur-sm overflow-y-auto">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 rounded-3xl w-full max-w-sm shadow-2xl animate-in zoom-in duration-300 my-8">
                 <h2 className="text-xl font-black mb-1 uppercase tracking-tighter">RESULTADO FINAL</h2>
                 <p className="text-xs font-bold text-[var(--color-text-muted)] mb-6 uppercase tracking-widest">Ingreso manual detallado</p>
@@ -291,7 +291,7 @@ const ManualScoreModal = ({ nosotros, ellos, onClose, onConfirm }: {
                 <div className="flex flex-col gap-2">
                     <button
                         onClick={handleConfirm}
-                        className="w-full bg-[var(--color-accent)] text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-green-900/20 active:scale-95 transition-all"
+                        className="w-full bg-[var(--color-accent)] text-[var(--color-text-primary)] py-4 rounded-xl font-black text-lg shadow-xl active:scale-95 transition-all"
                     >
                         GUARDAR Y FINALIZAR
                     </button>
@@ -343,22 +343,22 @@ const WinnerCelebration = ({ winner, teams, onFinish }: { winner: TeamId, teams:
             <div className="z-10 flex flex-col items-center relative w-full max-w-sm">
                 <div className="flex justify-between items-center w-full mb-6">
                     <div className="text-[12px] font-black uppercase tracking-[0.5em] text-[var(--color-text-muted)]">Partido Finalizado</div>
-                    <button onClick={copyShareLink} className="text-[10px] font-bold uppercase tracking-widest p-2 bg-white/10 rounded-full hover:bg-white/20 active:scale-95 transition-all">
+                    <button onClick={copyShareLink} className="text-[10px] font-bold uppercase tracking-widest p-2 bg-[var(--color-surface-hover)] rounded-full hover:bg-[var(--color-surface-hover)] active:scale-95 transition-all">
                         Compartir
                     </button>
                 </div>
 
                 <h1 className="text-6xl font-black text-center mb-10 italic tracking-tighter leading-none">
                     <span className={`text-[var(--color-${winner})] block mb-2`}>¡VICTORIA!</span>
-                    <span className="text-white uppercase break-words px-4 text-4xl">{winnerData.name}</span>
+                    <span className="text-[var(--color-text-primary)] uppercase break-words px-4 text-4xl">{winnerData.name}</span>
                 </h1>
 
-                <div className="flex items-center gap-6 mb-12 bg-white/5 py-6 px-10 rounded-3xl border border-white/10">
+                <div className="flex items-center gap-6 mb-12 bg-[var(--color-surface)] py-6 px-10 rounded-3xl border border-[var(--color-border)]">
                     <div className="flex flex-col items-center flex-1 min-w-[100px]">
                         <span className="text-[8px] font-black uppercase text-[var(--color-nosotros)]/60 mb-2 truncate max-w-[80px]">{teams.nosotros.name}</span>
                         <span className="text-5xl font-black tabular-nums">{teams.nosotros.score}</span>
                     </div>
-                    <div className="w-[1px] h-12 bg-white/10"></div>
+                    <div className="w-[1px] h-12 bg-[var(--color-surface-hover)]"></div>
                     <div className="flex flex-col items-center flex-1 min-w-[100px]">
                         <span className="text-[8px] font-black uppercase text-[var(--color-ellos)]/60 mb-2 truncate max-w-[80px]">{teams.ellos.name}</span>
                         <span className="text-5xl font-black tabular-nums">{teams.ellos.score}</span>
@@ -374,7 +374,7 @@ const WinnerCelebration = ({ winner, teams, onFinish }: { winner: TeamId, teams:
                     </button>
                     <button
                         onClick={() => window.location.reload()}
-                        className="text-[var(--color-text-muted)] font-bold uppercase tracking-widest text-xs py-4 active:text-white transition-colors"
+                        className="text-[var(--color-text-muted)] font-bold uppercase tracking-widest text-xs py-4 active:text-[var(--color-text-primary)] transition-colors"
                     >
                         Volver al Inicio
                     </button>

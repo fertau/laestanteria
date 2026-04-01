@@ -113,7 +113,7 @@ export const Leaderboard = ({ onBack }: { onBack: () => void }) => {
                         <div key={item.id} className={`bg-[var(--color-surface)] p-4 rounded-xl border border-[var(--color-border)] flex items-center gap-4 ${isTop ? 'ring-1 ring-[var(--color-accent)]/20 shadow-lg' : ''}`}>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-yellow-500 text-black' :
                                     index === 1 ? 'bg-slate-300 text-black' :
-                                        index === 2 ? 'bg-amber-700 text-white' :
+                                        index === 2 ? 'bg-amber-700 text-[var(--color-text-primary)]' :
                                             'bg-[var(--color-bg)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                 }`}>
                                 {index + 1}

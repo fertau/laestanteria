@@ -15,7 +15,7 @@ export const HistoryScreen = ({ onBack }: HistoryScreenProps) => {
     return (
         <div className="full-screen bg-[var(--color-bg)] flex flex-col p-5 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
-                <button onClick={onBack} className="text-[var(--color-text-muted)] font-black text-[10px] uppercase tracking-[0.3em] bg-white/5 py-2 px-4 rounded-full active:scale-95 transition-all">
+                <button onClick={onBack} className="text-[var(--color-text-muted)] font-black text-[10px] uppercase tracking-[0.3em] bg-[var(--color-surface)] py-2 px-4 rounded-full active:scale-95 transition-all">
                     ← VOLVER
                 </button>
                 <div className="bg-[var(--color-accent)]/10 text-[var(--color-accent)] px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-[var(--color-accent)]/20">
@@ -29,7 +29,7 @@ export const HistoryScreen = ({ onBack }: HistoryScreenProps) => {
                     <button
                         key={m}
                         onClick={() => setFilter(m)}
-                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${filter === m ? 'bg-white text-black border-white shadow-lg' : 'bg-white/5 text-white/40 border-white/5'}`}
+                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${filter === m ? 'bg-white text-black border-white shadow-lg' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)]'}`}
                     >
                         {m === 'ALL' ? 'Todos' : m}
                     </button>
@@ -44,10 +44,10 @@ export const HistoryScreen = ({ onBack }: HistoryScreenProps) => {
 
                     <section className="flex flex-col gap-4">
                         <div className="flex items-center gap-4 pl-2">
-                            <h3 className="text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">
+                            <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-[0.4em]">
                                 {filter === 'ALL' ? 'Historial Completo' : `Partidos ${filter}`}
                             </h3>
-                            <div className="h-[1px] flex-1 bg-white/5"></div>
+                            <div className="h-[1px] flex-1 bg-[var(--color-surface)]"></div>
                         </div>
                         <HistoryList filter={filter} />
                     </section>

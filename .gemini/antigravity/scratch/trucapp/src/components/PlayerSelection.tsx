@@ -61,7 +61,7 @@ export const PlayerSelection = ({ onSelect, requiredCount }: PlayerSelectionProp
 
     return (
         <div className="flex flex-col h-full p-4 bg-[var(--color-bg)]">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-4 text-white/90">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-4 text-[var(--color-text-primary)]">
                 Seleccionar Jugadores <span className="text-[var(--color-accent)] font-mono not-italic ml-2">({selectedIds.length}/{requiredCount})</span>
             </h2>
 
@@ -71,7 +71,7 @@ export const PlayerSelection = ({ onSelect, requiredCount }: PlayerSelectionProp
                     <input
                         type="text"
                         placeholder="Nuevo jugador..."
-                        className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-[var(--color-accent)] transition-all font-medium"
+                        className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-5 py-4 text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] transition-all font-medium"
                         value={newPlayerName}
                         onChange={(e) => setNewPlayerName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
@@ -79,7 +79,7 @@ export const PlayerSelection = ({ onSelect, requiredCount }: PlayerSelectionProp
                     <button
                         onClick={handleCreate}
                         disabled={!newPlayerName.trim()}
-                        className="bg-[var(--color-accent)] text-white w-14 rounded-2xl font-black text-2xl disabled:opacity-20 active:scale-95 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                        className="bg-[var(--color-accent)] text-[var(--color-text-primary)] w-14 rounded-2xl font-black text-2xl disabled:opacity-20 active:scale-95 transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)]"
                     >
                         +
                     </button>
@@ -103,24 +103,24 @@ export const PlayerSelection = ({ onSelect, requiredCount }: PlayerSelectionProp
                             className={`p-5 rounded-3xl border transition-all cursor-pointer flex justify-between items-center group
                     ${isSelected
                                     ? 'bg-[var(--color-surface-hover)] border-[var(--color-accent)] shadow-[0_0_15px_rgba(59,130,246,0.15)] translate-x-1'
-                                    : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-white/20'
+                                    : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-[var(--color-border)]'
                                 }
                 `}
                         >
                             <div className="flex flex-col leading-tight">
                                 <div className="flex items-center gap-2">
-                                    <span className={`font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-white/70'}`}>
+                                    <span className={`font-black uppercase tracking-tight ${isSelected ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
                                         {player.nickname || player.name}
                                     </span>
-                                    {isSelf && <span className="bg-white/10 text-[8px] font-black px-1.5 py-0.5 rounded-full text-white/40 uppercase tracking-widest">Tú</span>}
+                                    {isSelf && <span className="bg-[var(--color-surface-hover)] text-[8px] font-black px-1.5 py-0.5 rounded-full text-[var(--color-text-muted)] uppercase tracking-widest">Tú</span>}
                                     {isFriend && !isSelf && <span className="text-[var(--color-accent)] text-xs">★</span>}
                                 </div>
-                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelected ? 'text-[var(--color-accent)]/60' : 'text-white/20'}`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelected ? 'text-[var(--color-accent)]/60' : 'text-[var(--color-text-muted)]'}`}>
                                     {isSelf ? player.name : (isFriend ? 'Amigo' : 'Público')}
                                 </span>
                             </div>
                             <div className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center
-                                ${isSelected ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20' : 'border-white/5 bg-white/5'}
+                                ${isSelected ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}
                             `}>
                                 {isSelected && <div className="w-3 h-3 bg-[var(--color-accent)] rounded-full animate-in zoom-in duration-200"></div>}
                             </div>
@@ -130,7 +130,7 @@ export const PlayerSelection = ({ onSelect, requiredCount }: PlayerSelectionProp
             </div>
 
             <button
-                className="mt-6 w-full bg-gradient-to-br from-[var(--color-accent)] to-[#1d4ed8] text-white py-5 rounded-3xl font-black text-lg uppercase tracking-widest disabled:opacity-20 disabled:scale-100 active:scale-[0.98] transition-all shadow-xl disabled:grayscale"
+                className="mt-6 w-full bg-gradient-to-br from-[var(--color-accent)] to-[#1d4ed8] text-[var(--color-text-primary)] py-5 rounded-3xl font-black text-lg uppercase tracking-widest disabled:opacity-20 disabled:scale-100 active:scale-[0.98] transition-all shadow-xl disabled:grayscale"
                 disabled={!isReady}
                 onClick={() => {
                     const selectedPlayers = players.filter(p => selectedIds.includes(p.id));

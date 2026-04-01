@@ -32,8 +32,7 @@ export const HomeScreen = ({ onNewMatch, onHistory, onLeaderboard, onSocial }: H
             <div className="flex flex-col gap-4 mb-8">
                 <button
                     onClick={onNewMatch}
-                    className="bg-[var(--color-accent)] text-white py-5 rounded-lg font-bold text-xl shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-all"
-                    style={{ fontFamily: "'Sora', sans-serif" }}
+                    className="bg-[var(--color-accent)] text-[var(--color-bg)] py-5 rounded-lg font-bold text-xl active:scale-[0.98] transition-all"
                 >
                     NUEVO PARTIDO
                 </button>
@@ -74,23 +73,23 @@ export const HomeScreen = ({ onNewMatch, onHistory, onLeaderboard, onSocial }: H
                     <div key={m.id} className="flex justify-between items-center bg-[var(--color-surface)] p-4 rounded-[1.5rem] border border-[var(--color-border)] shadow-sm">
                         <div className="flex flex-col gap-1 flex-1 overflow-hidden">
                             <div className="flex justify-between items-center pr-4">
-                                <span className={`text-xs font-bold truncate max-w-[120px] ${m.winner === 'nosotros' ? 'text-[var(--color-nosotros)]' : 'text-white/60'}`}>
+                                <span className={`text-xs font-bold truncate max-w-[120px] ${m.winner === 'nosotros' ? 'text-[var(--color-nosotros)]' : 'text-[var(--color-text-secondary)]'}`}>
                                     {m.teams.nosotros.name}
                                 </span>
-                                <span className={`text-xs font-black ${m.winner === 'nosotros' ? 'text-[var(--color-nosotros)]' : 'text-white/40'}`}>
+                                <span className={`text-xs font-black ${m.winner === 'nosotros' ? 'text-[var(--color-nosotros)]' : 'text-[var(--color-text-muted)]'}`}>
                                     {m.teams.nosotros.score}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center pr-4">
-                                <span className={`text-xs font-bold truncate max-w-[120px] ${m.winner === 'ellos' ? 'text-[var(--color-ellos)]' : 'text-white/60'}`}>
+                                <span className={`text-xs font-bold truncate max-w-[120px] ${m.winner === 'ellos' ? 'text-[var(--color-ellos)]' : 'text-[var(--color-text-secondary)]'}`}>
                                     {m.teams.ellos.name}
                                 </span>
-                                <span className={`text-xs font-black ${m.winner === 'ellos' ? 'text-[var(--color-ellos)]' : 'text-white/40'}`}>
+                                <span className={`text-xs font-black ${m.winner === 'ellos' ? 'text-[var(--color-ellos)]' : 'text-[var(--color-text-muted)]'}`}>
                                     {m.teams.ellos.score}
                                 </span>
                             </div>
                         </div>
-                        <div className="text-[8px] font-black text-white/20 uppercase tracking-widest pl-2 border-l border-white/5">
+                        <div className="text-[8px] font-black text-[var(--color-text-muted)] uppercase tracking-widest pl-2 border-l border-[var(--color-border)]">
                             {new Date(m.startDate).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
                         </div>
                     </div>

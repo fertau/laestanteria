@@ -297,14 +297,14 @@ export const TeamConfiguration = ({ players, onStartMatch }: TeamConfigurationPr
                 <div className="flex bg-[var(--color-surface)] p-1 rounded-2xl border border-[var(--color-border)]">
                     <button
                         onClick={() => setTargetScore(15)}
-                        className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${targetScore === 15 ? 'bg-[var(--color-accent)] text-white shadow-md' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
+                        className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${targetScore === 15 ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)] shadow-md' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
                     >
                         15 PUNTOS
                         <span className="block text-[8px] font-normal opacity-70">RÁPIDO</span>
                     </button>
                     <button
                         onClick={() => setTargetScore(30)}
-                        className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${targetScore === 30 ? 'bg-[var(--color-accent)] text-white shadow-md' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
+                        className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${targetScore === 30 ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)] shadow-md' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
                     >
                         30 PUNTOS
                         <span className="block text-[8px] font-normal opacity-70">ESTÁNDAR</span>
@@ -339,7 +339,7 @@ export const TeamConfiguration = ({ players, onStartMatch }: TeamConfigurationPr
             </div>
 
             <button
-                className="w-full bg-[var(--color-accent)] text-white py-5 rounded-3xl font-black text-xl disabled:opacity-30 mt-auto shadow-2xl shadow-green-900/40 active:scale-95 transition-all"
+                className="w-full bg-[var(--color-accent)] text-[var(--color-text-primary)] py-5 rounded-3xl font-black text-xl disabled:opacity-30 mt-auto shadow-2xl active:scale-95 transition-all"
                 disabled={!isValid}
                 onClick={() => {
                     try {

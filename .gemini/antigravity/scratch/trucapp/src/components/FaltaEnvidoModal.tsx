@@ -71,11 +71,11 @@ export const FaltaEnvidoModal = ({ onClose }: FaltaEnvidoModalProps) => {
     if (!selectedTeam) {
         return (
             <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-6 animate-in fade-in duration-300 backdrop-blur-md">
-                <h2 className="text-xl font-black mb-12 text-white italic tracking-[0.2em]">¿QUIÉN GANÓ LA FALTA?</h2>
+                <h2 className="text-xl font-black mb-12 text-[var(--color-text-primary)] italic tracking-[0.2em]">¿QUIÉN GANÓ LA FALTA?</h2>
                 <div className="flex gap-4 w-full max-w-sm">
                     <button
                         onClick={() => setSelectedTeam('nosotros')}
-                        className="flex-1 bg-[var(--color-nosotros)] text-black py-8 rounded-3xl text-xl font-black shadow-2xl shadow-green-900/40 active:scale-95 transition-all truncate px-2"
+                        className="flex-1 bg-[var(--color-nosotros)] text-black py-8 rounded-3xl text-xl font-black shadow-2xl active:scale-95 transition-all truncate px-2"
                     >
                         {teams.nosotros.name.toUpperCase()}
                     </button>
@@ -100,7 +100,7 @@ export const FaltaEnvidoModal = ({ onClose }: FaltaEnvidoModalProps) => {
 
     return (
         <div className="fixed inset-0 bg-black/95 flex flex-col items-center justify-center z-[200] p-6 animate-in slide-in-from-bottom duration-300 backdrop-blur-md">
-            <h2 className="text-2xl font-black mb-8 text-white tracking-[0.3em] italic">FALTA ENVIDO</h2>
+            <h2 className="text-2xl font-black mb-8 text-[var(--color-text-primary)] tracking-[0.3em] italic">FALTA ENVIDO</h2>
 
             <div className="bg-[var(--color-surface)] p-6 rounded w-full mb-6 border border-[var(--color-border)]">
                 <div className="flex justify-between mb-2 text-[var(--color-text-muted)] text-[10px] uppercase font-black tracking-widest">
@@ -121,7 +121,7 @@ export const FaltaEnvidoModal = ({ onClose }: FaltaEnvidoModalProps) => {
                         value={customPoints}
                         onChange={(e) => setCustomPoints(e.target.value)}
                         placeholder={calculatedPoints.toString()}
-                        className="bg-transparent border-b-2 border-[var(--color-accent)] text-center text-6xl font-black text-white w-32 focus:outline-none"
+                        className="bg-transparent border-b-2 border-[var(--color-accent)] text-center text-6xl font-black text-[var(--color-text-primary)] w-32 focus:outline-none"
                         autoFocus
                     />
                 ) : (
@@ -136,7 +136,7 @@ export const FaltaEnvidoModal = ({ onClose }: FaltaEnvidoModalProps) => {
 
             <button
                 onClick={handleConfirm}
-                className={`w-full bg-[var(--color-${selectedTeam})] text-white py-4 rounded font-bold text-xl mb-4`}
+                className={`w-full bg-[var(--color-${selectedTeam})] text-[var(--color-text-primary)] py-4 rounded font-bold text-xl mb-4`}
             >
                 CONFIRMAR
             </button>
